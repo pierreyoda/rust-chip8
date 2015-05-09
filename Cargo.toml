@@ -1,0 +1,12 @@
+[package]
+name = "chip8"
+version = "0.1.0"
+authors = ["pierreyoda <pierreyoda@users.noreply.github.com>"]
+
+[lib]
+name = "chip8vm"
+patch = "src/lib.rs"
+
+[dependencies]
+rand = "0.3.8"
+sdl2 = "0.2.3"
