@@ -1,37 +1,46 @@
 /// Core CPU implementation.
 
+use std::error::Error;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 use rand::random;
 
-use display::Display;
+use display::{Display, FONT_SET};
 use keypad::Keypad;
 
-/// Chip8 virtual machine.
+/// CHIP 8 virtual machine.
+/// The references used to implement this particular interpreter include :
+/// http://en.wikipedia.org/wiki/CHIP-8
+/// http://mattmik.com/chip8.html
+/// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 pub struct Chip8 {
     /// The current opcode.
-    opcode: u16,
+    opcode      : u16,
     /// The chip's 4096 bytes of memory.
-    memory: [u8; 4096],
+    memory      : [u8; 4096],
     /// The chip's 16 registers, from V0 to VF.
     /// VF is used for the 'carry flag'.
-    v: [u8; 16],
+    v           : [u8; 16],
     /// Index register.
-    i: usize,
+    i           : usize,
     /// Program counter.
-    pc: usize,
+    pc          : usize,
     /// The 16-levels stack.
-    stack: [u16; 16],
+    stack       : [u16; 16],
     /// Stack pointer.
-    sp: usize,
+    sp          : usize,
     // Timer registers, counting at 60 Hz.
-    delay_timer: u8,
-    sound_timer: u8,
+    delay_timer : u8,
+    sound_timer : u8,
     /// Screen component.
-    display: Display,
+    pub display : Display,
     /// Input component.
-    keypad: Keypad,
+    pub keypad  : Keypad,
 }
 
-
+/// Macro for handling invalid/unimplemented opcodes.
+/// As of now only prints a error message, could maybe panic in the future.
 macro_rules! op_not_implemented {
     ($op: expr, $pc: expr) => (
         println!("Not implemented opcode {:X} at {:X}", $op as usize, $pc);
@@ -40,9 +49,9 @@ macro_rules! op_not_implemented {
 
 
 impl Chip8 {
-    /// Create and return a new Chip8 virtual machine.
+    /// Create and return a new, initialized Chip8 virtual machine.
     pub fn new() -> Chip8 {
-        Chip8 {
+        let mut chip8 = Chip8 {
             opcode: 0u16,
             memory: [0u8; 4096],
             v: [0u8; 16],
@@ -54,7 +63,39 @@ impl Chip8 {
             sound_timer: 0u8,
             display: Display::new(),
             keypad: Keypad::new(),
+        };
+        // load the font set in memory in the space [0x0, 0x200[ = [0, 80[
+        for i in 0..80 {
+            chip8.memory[i] = FONT_SET[i];
         }
+        // the program space starts at 0x200
+        chip8.pc = 0x200;
+
+        chip8
+    }
+
+    /// Load a Chip8 rom from the given filepath.
+    /// If the operation fails, return a String explaining why.
+    pub fn load(&mut self, filepath: &Path) -> Option<String> {
+        let file = match File::open(filepath) {
+            Ok(f) => f,
+            Err(ref why) => {
+                return Some(format!("couldn't open rom file \"{}\" : {}",
+                                    filepath.display(),
+                                    Error::description(why)));
+            },
+        };
+        for (i, b) in file.bytes().enumerate() {
+            //if b.is_none() /* EOF */ { break; }
+            match b {
+                Ok(byte) => self.memory[self.pc + i] = byte,
+                Err(e) => {
+                    return Some(format!("error while reading ROM : {}",
+                                        e.to_string()));
+                },
+            }
+        }
+        None
     }
 
     /// Emulate a Chip8 CPU cycle.
@@ -162,6 +203,19 @@ impl Chip8 {
             // FXYZ
             0xF000 => self.op_fxyz(),
             _ => op_not_implemented!(self.opcode, self.pc),
+        };
+
+        // Update the timers
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+        if self.sound_timer > 0 {
+            if self.sound_timer == 1 {
+                // Play a sound
+                // TODO
+                println!("Beep !");
+            }
+            self.sound_timer -= 1;
         }
     }
 
@@ -184,6 +238,7 @@ impl Chip8 {
     fn op_8xyz(&mut self) {
         let x = self.get_op_x();
         let y = self.get_op_y();
+        // match the YZ value
         match self.opcode & 0x000F {
             // set VX to the value of VY
             0 => self.v[x] = self.v[y],
@@ -229,9 +284,10 @@ impl Chip8 {
         self.pc += 2;
     }
 
-    /// Opcode FX07.
+    /// Opcode FXYZ.
     fn op_fxyz(&mut self) {
         let x = self.get_op_x();
+        // match the YZ value
         match self.opcode & 0x00FF {
             // set VX to the value of the delay timer
             0x07 => self.v[x] = self.delay_timer,
@@ -252,6 +308,7 @@ impl Chip8 {
             0x15 => self.delay_timer = self.v[x],
             // set the sound timer to VX
             0x18 => self.sound_timer = self.v[x],
+            // FX29
             _ => op_not_implemented!(self.opcode, self.pc),
         }
         self.pc += 2;

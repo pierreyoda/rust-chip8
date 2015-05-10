@@ -12,3 +12,5 @@
 *.lock
 chip8.sublime-project
 *.sublime-workspace
+*.zip
+*.ch8
