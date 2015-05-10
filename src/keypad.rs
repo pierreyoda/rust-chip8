@@ -3,7 +3,7 @@
 ///
 /// The Chip8 virtual keypad has the following layout :
 ///
-/// Virtual Keypad           Keyboard
+/// Virtual Keypad       Keyboard (QWERTY)
 /// +-+-+-+-+                +-+-+-+-+
 /// |1|2|3|C|                |1|2|3|4|
 /// +-+-+-+-+                +-+-+-+-+
@@ -33,10 +33,27 @@ impl Keypad {
     /// Return the state of the key at the given index, or None
     /// if the index is invalid.
     pub fn is_pressed(&self, index: usize) -> Option<bool> {
+        // TODO : security check necessary ?
         if index < self.keys.len() {
             Some(self.keys[index])
         } else {
             None
         }
+    }
+
+    /// Set the key at the given index as currently pressed.
+    pub fn pressed(&mut self, index: usize) {
+        // DEBUG
+        debug_assert!(index < 16);
+
+        println!("pressed {:X}", index);
+    }
+
+    /// Set the key at the given index as currently not pressed.
+    pub fn released(&mut self, index: usize) {
+        // DEBUG
+        debug_assert!(index < 16);
+
+        self.keys[index] = false;
     }
 }

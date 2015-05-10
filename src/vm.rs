@@ -30,9 +30,9 @@ pub struct Chip8 {
     stack       : [u16; 16],
     /// Stack pointer.
     sp          : usize,
-    // Timer registers, counting at 60 Hz.
-    delay_timer : u8,
-    sound_timer : u8,
+    // Timer registers, must be updated at 60 Hz by the emulator.
+    pub delay_timer : u8,
+    pub sound_timer : u8,
     /// Screen component.
     pub display : Display,
     /// Input component.
@@ -204,19 +204,6 @@ impl Chip8 {
             0xF000 => self.op_fxyz(),
             _ => op_not_implemented!(self.opcode, self.pc),
         };
-
-        // Update the timers
-        if self.delay_timer > 0 {
-            self.delay_timer -= 1;
-        }
-        if self.sound_timer > 0 {
-            if self.sound_timer == 1 {
-                // Play a sound
-                // TODO
-                println!("Beep !");
-            }
-            self.sound_timer -= 1;
-        }
     }
 
     /// Jump to the 0x0NNN adress contained in the current opcode.

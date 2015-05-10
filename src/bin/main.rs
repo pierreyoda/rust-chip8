@@ -8,7 +8,7 @@ extern crate log;
 
 mod chip8app;
 mod logger;
-use chip8app::{Chip8Application, Chip8Config};
+use chip8app::{Chip8Application, Chip8Config, KeyboardBinding};
 
 fn print_usage(opts: Options) {
     let brief =
@@ -29,6 +29,9 @@ fn main() {
 
     let mut opts = Options::new();
     opts.optflag("h", "help", "Print this help menu.");
+    opts.optopt("k", "keyboard",
+                "The keyboard configuration to use. QWERTY by default.",
+                "QWERTY/AZERTY");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(why) => panic!(why.to_string()),
@@ -37,6 +40,18 @@ fn main() {
         print_usage(opts);
         return;
     }
+    let keyboard_config = match matches.opt_str("k") {
+        Some(ref string) => match &string[..] {
+            "QWERTY" => KeyboardBinding::QWERTY,
+            "AZERTY" => KeyboardBinding::AZERTY,
+            _        => {
+                warn!("unrecognized keyboard configuration argument \"{}\".",
+                      string);
+                KeyboardBinding::QWERTY
+            },
+        },
+        _ => KeyboardBinding::QWERTY,
+    };
     /*let rom_file = if !matches.free.is_empty() { matches.free[0].clone() }
         else { print_usage(opts); return; };*/
     // TEST
@@ -46,7 +61,8 @@ fn main() {
     let mut emulator = Chip8Application::new(Chip8Config::new()
                                              .w_title("rust-chip8 emulator")
                                              .w_width(800)
-                                             .w_height(600));
+                                             .w_height(600)
+                                             .key_binds(keyboard_config));
 
     // Load the ROM and start the emulation
     let rom_filepath = Path::new(&rom_file);
