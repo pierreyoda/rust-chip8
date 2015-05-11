@@ -45,14 +45,16 @@ impl Keypad {
     pub fn pressed(&mut self, index: usize) {
         // DEBUG
         debug_assert!(index < 16);
+        //println!("pressed {:X}", index);
 
-        println!("pressed {:X}", index);
+        self.keys[index] = true;
     }
 
     /// Set the key at the given index as currently not pressed.
     pub fn released(&mut self, index: usize) {
         // DEBUG
         debug_assert!(index < 16);
+        //println!("released {:X}", index);
 
         self.keys[index] = false;
     }

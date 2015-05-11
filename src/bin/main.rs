@@ -7,8 +7,9 @@ use getopts::Options;
 extern crate log;
 
 mod chip8app;
+mod input;
 mod logger;
-use chip8app::{Chip8Application, Chip8Config, KeyboardBinding};
+use chip8app::{Chip8Application, Chip8Config};
 
 fn print_usage(opts: Options) {
     let brief =
@@ -42,15 +43,15 @@ fn main() {
     }
     let keyboard_config = match matches.opt_str("k") {
         Some(ref string) => match &string[..] {
-            "QWERTY" => KeyboardBinding::QWERTY,
-            "AZERTY" => KeyboardBinding::AZERTY,
+            "QWERTY" => input::KeyboardBinding::QWERTY,
+            "AZERTY" => input::KeyboardBinding::AZERTY,
             _        => {
                 warn!("unrecognized keyboard configuration argument \"{}\".",
                       string);
-                KeyboardBinding::QWERTY
+                input::KeyboardBinding::QWERTY
             },
         },
-        _ => KeyboardBinding::QWERTY,
+        _ => input::KeyboardBinding::QWERTY,
     };
     /*let rom_file = if !matches.free.is_empty() { matches.free[0].clone() }
         else { print_usage(opts); return; };*/

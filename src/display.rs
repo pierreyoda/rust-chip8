@@ -1,3 +1,11 @@
+/// The display crate handles the display component of the CHIP 8 virtual
+/// machine.
+
+/// The CHIP 8 display width, in pixels.
+pub const DISPLAY_WIDTH  : u16 = 64;
+/// The CHIP 8 display height, in pixels.
+pub const DISPLAY_HEIGHT : u16 = 32;
+
 
 /// The graphics component of a Chip 8 virtual machine.
 /// The Chip 8 uses a 64x32 monochrome display with the format :
@@ -8,24 +16,24 @@
 /// +-----------------+
 pub struct Display {
     /// 64x32 black and white screen.
-    /// 'gfx[i]' contains the line number 'i'.
+    /// 'gfx[i]' contains the pixel column number 'i'.
     /// For a single pixel, '1' means white and '0' black.
     /// Using bytes instead of booleans will make drawing instructions easier
     /// to implement for the same memory cost.
-    gfx: [[u8; 64]; 32]
+    pub gfx: [[u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize]
 }
 
 impl Display {
     /// Create and return a new Display instance.
     pub fn new() -> Display {
         Display {
-            gfx: [[0u8; 64]; 32]
+            gfx: [[0u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize]
         }
     }
 
     /// Clear the screen (set it to uniform black).
     pub fn clear(&mut self) {
-        self.gfx = [[0u8; 64]; 32];
+        self.gfx = [[0u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize];
     }
 }
 
