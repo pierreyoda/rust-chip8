@@ -48,7 +48,9 @@ pub struct Chip8 {
 /// As of now only prints a error message, could maybe panic in the future.
 macro_rules! op_not_implemented {
     ($op: expr, $pc: expr) => (
-        println!("Not implemented opcode {:X} at {:X}", $op as usize, $pc);
+        println!("Not implemented opcode {:0>4X} at {:0>5X}",
+                 $op as usize,
+                 $pc);
     )
 }
 
@@ -136,19 +138,20 @@ impl Chip8 {
         let op = self.opcode.clone();
         match self.opcode & 0xF000 {
             0x0000 => {
-                match self.opcode & 0x000F {
+                match self.opcode & 0x00FF {
                     // 00E0 : clear the screen
-                    0x0000 => self.display.clear(),
+                    0x00E0 => self.display.clear(),
                     // 00EE : return from a subroutine
-                    0x000E => {
+                    0x00EE => {
                         self.sp -= 1;
                         self.pc = self.stack[self.sp] as usize;
                     },
+                    // ignore 0NNN : machine language subroutine at address NNN
                     _ => op_not_implemented!(self.opcode, self.pc),
                 };
                 self.pc += 2;
             },
-            // 0NNN : jump the program counter to the NNN address
+            // 1NNN : jump the program counter to the NNN address
             0x1000 => self.jump(op & 0x0FFF),
             // 2NNN : call subroutine at NNN
             0x2000 => self.call(op & 0x0FFF),
@@ -203,7 +206,7 @@ impl Chip8 {
             // BNNN : jump to the adress (NNN+V0)
             0xB000 => {
                 let v0 = self.v[0] as u16;
-                self.jump(op & 0x0FF + v0);
+                self.jump(op & 0x0FFF + v0);
             },
             // CXNN : sets VX to a random number, masked by NN
             0xC000 => {
@@ -228,6 +231,7 @@ impl Chip8 {
                             self.pc += 2;
                         }
                     }
+                    // unknown opcode
                     _ => op_not_implemented!(self.opcode, self.pc),
                 }
                 self.pc += 2;
@@ -259,50 +263,50 @@ impl Chip8 {
     fn op_8xyz(&mut self) {
         let x = self.get_op_x();
         let y = self.get_op_y();
-        // match the YZ value
+        // match the Z value
         match self.opcode & 0x000F {
-            // set VX to the value of VY
+            // 8XY0 : set VX to the value of VY
             0 => self.v[x] = self.v[y],
-            // sets VX to (VX or VY)
+            // 8XY1 : sets VX to (VX or VY)
             1 => self.v[x] |= self.v[y],
-            // set VX to (VX and VY)
+            // 8XY2 : set VX to (VX and VY)
             2 => self.v[x] &= self.v[y],
-            // set VX to (VX xor VY)
+            // 8XY3 : set VX to (VX xor VY)
             3 => self.v[x] ^= self.v[y],
-            // add VY to VX
+            // 8XY4 : add VY to VX
             4 => {
                 let vx: u16 = self.v[x] as u16 + self.v[y] as u16;
                 self.v[x] = vx as u8; // avoid overflow
                 // if there is a carry set VF to 1, otherwise set it to 0
                 self.v[15] = if vx > 255 { 1 } else { 0 };
             }
-            // substract VY from VX
+            // 8XY5 : substract VY from VX
             5 => {
                 let vx: i8 = self.v[x] as i8 - self.v[y] as i8;
                 self.v[x] = vx as u8; // avoid underflow
                 // set VF to 1 if there is a borrow, set it to 0 otherwise
                 self.v[15] = if vx < 0 { 1 } else { 0 };
             }
-            // Shift VX right by one. VF is set to the value of the least
-            // significant bit of VX before the shift.
+            // 8XY6 : shift VX right by one. VF is set to the value of the
+            // least significant bit of VX before the shift.
             6 => {
                 self.v[15] = self.v[x] & 0b0001;
                 self.v[x] >>= 1;
             }
-            // set VX to (VY minus VX)
+            // 8XY7 : set VX to (VY minus VX)
             7 => {
                 let vx: i8 = self.v[y] as i8 - self.v[x] as i8;
                 self.v[x] = vx as u8; // avoid underflow
                 // VF is set to 0 when there's a borrow, and 1 otherwise
                 self.v[15] = if vx < 0 { 1 } else { 0 };
             }
-            // Shift VX left by one. VF is set to the value of the most
+            // 8XYE : shift VX left by one. VF is set to the value of the most
             // significant bit of VX before the shift.
             0xE => {
                 self.v[15] = self.v[x] & 0b1000;
                 self.v[x] <<= 1;
             }
-            // unsupported Z
+            // unknown Z
             _ => op_not_implemented!(self.opcode, self.pc),
         }
         self.pc += 2;
@@ -345,6 +349,8 @@ impl Chip8 {
             0x15 => self.delay_timer = self.v[x],
             // FX18 : set the sound timer to VX
             0x18 => self.sound_timer = self.v[x],
+            // FX1E : add VX to I
+            0x1E => self.i += self.v[x] as usize,
             // FX29 : set I to the location of the sprite for the character
             // in VX. The characters are thus 0-F.
             0x29 => {
