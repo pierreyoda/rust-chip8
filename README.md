@@ -1,4 +1,4 @@
-# rust-chip8
+# rust-chip8 [![Build Status](https://travis-ci.org/pierreyoda/rust-chip8.svg?branch=master)](https://travis-ci.org/pierreyoda/rust-chip8)
 A CHIP 8 emulator implemented in Rust and using SDL 2.
 Created for learning purposes.
 
