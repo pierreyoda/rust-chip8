@@ -1,7 +1,0 @@
-language: rust
-
-rust:
-  - nightly
-
-install:
-  - sudo apt-get install libsdl2-dev
