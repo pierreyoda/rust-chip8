@@ -9,31 +9,65 @@ pub const DISPLAY_HEIGHT : u16 = 32;
 
 /// The graphics component of a Chip 8 virtual machine.
 /// The Chip 8 uses a 64x32 monochrome display with the format :
-/// +-----------------+
+/// O-----------------> X
 /// |(0,0)      (63,0)|
 /// |                 |
 /// |(0,31)    (63,31)|
-/// +-----------------+
+/// ∨-----------------.
+/// Y
 pub struct Display {
     /// 64x32 black and white screen.
     /// 'gfx[i]' contains the pixel column number 'i'.
     /// For a single pixel, '1' means white and '0' black.
     /// Using bytes instead of booleans will make drawing instructions easier
     /// to implement for the same memory cost.
-    pub gfx: [[u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize]
+    pub gfx: [[u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize],
+    /// Has the display been modified since the last time it was drawn ?
+    /// Should be set to false by the emulator application after every draw.
+    pub dirty: bool,
 }
 
 impl Display {
     /// Create and return a new Display instance.
     pub fn new() -> Display {
         Display {
-            gfx: [[0u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize]
+            gfx: [[0u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize],
+            dirty: true,
         }
     }
 
     /// Clear the screen (set it to uniform black).
     pub fn clear(&mut self) {
         self.gfx = [[0u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize];
+        self.dirty = true;
+    }
+
+    /// Draw the given sprite to the display at the given position.
+    /// The sprite is a reference to the slice of an array of 8 * H pixels.
+    /// Return true if there was a collision (i.e. if any of the written pixels
+    /// changed from 1 to 0).
+    pub fn draw(&mut self, xpos: usize, ypos: usize, sprite: &[u8]) -> bool {
+        self.dirty = true;
+        let mut collision = false;
+        let h = sprite.len();
+
+        for j in 0..h {
+            for i in 0..8 {
+                // screen wrap if necessary
+                let y = (ypos + j) % (DISPLAY_HEIGHT as usize);
+                let x = (xpos + i) % (DISPLAY_WIDTH as usize);
+
+                // draw each sprite pixel with a XOR operation
+                // i.e. toggle the pixel
+                // 0x80 = 1000 0000 : allows to check each pixel in the sprite
+                if (sprite[j] & (0x80 >> i)) != 0x00 {
+                    if self.gfx[y][x] == 0x01 { collision = true; }
+                    self.gfx[y][x] ^= 0x01;
+                }
+            }
+        }
+
+        collision
     }
 }
 

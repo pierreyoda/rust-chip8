@@ -157,12 +157,19 @@ impl Chip8Application {
         let mut update_timer = 0.0;
         let max_dt = 1000.0 / fps; // target max frametime, in fps
 
+        let max_cycles_per_sec = 100;//self.vm.clock_hz;
+        let mut cycles = 0; // number of CPU cycles done in the current second
+        let mut cycles_t = t;
+
         // TEST
-        self.vm.display.gfx[0][4] = 1;
-        self.vm.display.gfx[16][45] = 1;
-        self.vm.display.gfx[24][9] = 1;
-        self.vm.delay_timer = 60 * 4; // 4s
-        self.vm.sound_timer = 60 * 2; // 2s
+        if false {
+            let test_prog = [0xF00A, 0xF029, 0xD795, 0x1200];
+            self.vm = Chip8::new();
+            for (i, b) in test_prog.iter().enumerate() {
+                self.vm.memory[0x200+i*2] = (*b >> 8) as u8;
+                self.vm.memory[0x200+i*2+1] = (*b & 0x00FF) as u8;
+            }
+        }
 
         'main : loop {
             // Frame time
@@ -181,10 +188,14 @@ impl Chip8Application {
                         // keypad emulation
                         match key_binds.get(&keycode) {
                             Some(index) => {
-                                if *index != last_pressed {
-                                    self.vm.keypad.pressed(*index);
+                                if !self.vm.is_waiting_for_key {
+                                    if *index != last_pressed {
+                                        self.vm.keypad.pressed(*index);
+                                    }
+                                    last_pressed = *index;
+                                } else {
+                                    self.vm.end_wait_for_key_press(*index);
                                 }
-                                last_pressed = *index;
                             },
                             _           => {},
                         }
@@ -201,13 +212,24 @@ impl Chip8Application {
             }
 
             // Chip8 CPU cycles
-            //self.vm.emulate_cycle();
+            if t - cycles_t > 1000 {
+                println!("ran {} cycles during the last second", cycles);
+                cycles_t = t;
+                cycles = 0;
+            }
+            if !self.vm.is_waiting_for_key && cycles < max_cycles_per_sec {
+                cycles += 1;
+                if self.vm.emulate_cycle() {
+                    info!("The program was ended properly.");
+                    break 'main;
+                }
+            }
 
             // Emulator update : manage the Chip8 timers and render its display
             while update_timer >= max_dt {
                 // timer updates
                 if self.vm.delay_timer > 0 {
-                    println!("{:?}", self.vm.delay_timer); // debug
+                    //println!("{:?}", self.vm.delay_timer); // debug
                     self.vm.delay_timer -= 1;
                 }
                 if self.vm.sound_timer > 0 {
@@ -218,26 +240,31 @@ impl Chip8Application {
                     }
                 }
                 update_timer -= max_dt;
-                // draw
-                drawer.set_draw_color(color_pixel_off);
-                drawer.clear();
-                drawer.set_draw_color(color_pixel_on);
-                for y in 0i32..display_height {
-                    for x in 0i32..display_width {
-                        // TODO : precompute the used Rect ?
-                        // since they only change at window resize...
-                        if self.vm.display.gfx[y as usize][x as usize] == 1u8 {
-                            let _ = drawer.fill_rect(Rect::new(
-                                                     x * pixel_size,
-                                                     y * pixel_size,
-                                                     pixel_size,
-                                                     pixel_size));
+                // draw if needed
+                if self.vm.display.dirty {
+                    drawer.set_draw_color(color_pixel_off);
+                    drawer.clear();
+                    drawer.set_draw_color(color_pixel_on);
+                    for y in 0i32..display_height {
+                        for x in 0i32..display_width {
+                            // TODO : precompute the used Rect ?
+                            // since they only change at window resize...
+                            if self.vm.display.gfx[y as usize][x as usize] == 1u8 {
+                                let _ = drawer.fill_rect(Rect::new(
+                                                         x * pixel_size,
+                                                         y * pixel_size,
+                                                         pixel_size,
+                                                         pixel_size));
+                            }
                         }
                     }
+                    self.vm.display.dirty = false;
                 }
                 drawer.present();
             }
             update_timer += dt as f32;
+
+            sdl2::timer::delay(5);
         }
 
         true

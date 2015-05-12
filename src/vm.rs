@@ -15,28 +15,33 @@ use keypad::Keypad;
 /// http://mattmik.com/chip8.html
 /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 pub struct Chip8 {
+    /// The CPU clock frequency, i.e. the number of instructions it can execute
+    /// per second.
+    pub clock_hz           : u32,
     /// The current opcode.
-    opcode      : u16,
+    opcode                 : u16,
     /// The chip's 4096 bytes of memory.
-    memory      : [u8; 4096],
+    pub memory             : [u8; 4096], // TEMPORARY pub for debug purposes
     /// The chip's 16 registers, from V0 to VF.
     /// VF is used for the 'carry flag'.
-    v           : [u8; 16],
+    v                      : [u8; 16],
     /// Index register.
-    i           : usize,
+    i                      : usize,
     /// Program counter.
-    pc          : usize,
+    pc                     : usize,
     /// The 16-levels stack.
-    stack       : [u16; 16],
+    stack                  : [u16; 16],
     /// Stack pointer.
-    sp          : usize,
+    sp                     : usize,
     // Timer registers, must be updated at 60 Hz by the emulator.
-    pub delay_timer : u8,
-    pub sound_timer : u8,
+    pub delay_timer        : u8,
+    pub sound_timer        : u8,
     /// Screen component.
-    pub display : Display,
+    pub display            : Display,
     /// Input component.
-    pub keypad  : Keypad,
+    pub keypad             : Keypad,
+    /// Is the virtual machine waiting for a keypress ?
+    pub is_waiting_for_key : bool,
 }
 
 /// Macro for handling invalid/unimplemented opcodes.
@@ -52,17 +57,19 @@ impl Chip8 {
     /// Create and return a new, initialized Chip8 virtual machine.
     pub fn new() -> Chip8 {
         let mut chip8 = Chip8 {
-            opcode: 0u16,
-            memory: [0u8; 4096],
-            v: [0u8; 16],
-            i: 0usize,
-            pc: 0usize,
-            stack: [0u16; 16],
-            sp: 0usize,
-            delay_timer: 0u8,
-            sound_timer: 0u8,
-            display: Display::new(),
-            keypad: Keypad::new(),
+            clock_hz           : 600,
+            opcode             : 0u16,
+            memory             : [0u8; 4096],
+            v                  : [0u8; 16],
+            i                  : 0usize,
+            pc                 : 0usize,
+            stack              : [0u16; 16],
+            sp                 : 0usize,
+            delay_timer        : 0u8,
+            sound_timer        : 0u8,
+            display            : Display::new(),
+            keypad             : Keypad::new(),
+            is_waiting_for_key : false,
         };
         // load the font set in memory in the space [0x0, 0x200[ = [0, 80[
         for i in 0..80 {
@@ -72,6 +79,19 @@ impl Chip8 {
         chip8.pc = 0x200;
 
         chip8
+    }
+
+    /// Called by the emulator application to inform the virtual machine
+    /// waiting for a key pressed that a key has been pressed.
+    pub fn end_wait_for_key_press(&mut self, key_pressed: usize) {
+        if !self.is_waiting_for_key {
+            warn!(concat!("Chip8::end_wait_for_key_press called but the VM ",
+                          "wasn't waiting for a key press - ignoring"));
+            return;
+        }
+        self.v[self.get_op_x()] = key_pressed as u8;
+        self.is_waiting_for_key = false;
+        self.pc += 2;
     }
 
     /// Load a Chip8 rom from the given filepath.
@@ -99,11 +119,18 @@ impl Chip8 {
     }
 
     /// Emulate a Chip8 CPU cycle.
-    pub fn emulate_cycle(&mut self) {
+    /// Return true if the loaded program is done.
+    pub fn emulate_cycle(&mut self) -> bool {
+        // Is the program finished ?
+        if self.pc >= 4094 {
+            return true;
+        }
         // Fetch and decode the opcode to execute ;
         // an opcode being 2 bytes long, we need to read 2 bytes from memory
         self.opcode = (self.memory[self.pc] as u16) << 8
                       | (self.memory[self.pc + 1] as u16);
+
+        //println!("{:0>4X} {:0>4X}", self.opcode, self.pc);
 
         // Execute the opcode
         let op = self.opcode.clone();
@@ -152,8 +179,11 @@ impl Chip8 {
                 self.pc += 2;
             },
             // 7XNN : add NN to VX
+            // wrap the value around 256 if needed
             0x7000 => {
-                self.v[self.get_op_x()] += self.get_op_nn();
+                let vx: u16 = self.v[self.get_op_x()] as u16 +
+                    self.get_op_nn() as u16; // avoid u8 overflow with u16
+                self.v[self.get_op_x()] = vx as u8;
                 self.pc += 2;
             },
             // 8XYZ : arithmetic operations on VX and VY
@@ -180,7 +210,9 @@ impl Chip8 {
                 self.v[self.get_op_x()] = random::<u8>() & self.get_op_nn();
                 self.pc += 2;
             },
-            // EX9E : input
+            // DXYN : draw sprite
+            0xD000 => { self.draw_sprite(); self.pc += 2; },
+            // EX9E / EXA1 : input
             0xE000 => {
                 let keypad_index = self.v[self.get_op_x()] as usize;
                 match self.opcode & 0x00FF {
@@ -204,6 +236,8 @@ impl Chip8 {
             0xF000 => self.op_fxyz(),
             _ => op_not_implemented!(self.opcode, self.pc),
         };
+
+        false
     }
 
     /// Jump to the 0x0NNN adress contained in the current opcode.
@@ -237,15 +271,17 @@ impl Chip8 {
             3 => self.v[x] ^= self.v[y],
             // add VY to VX
             4 => {
-                self.v[x] += self.v[y];
+                let vx: u16 = self.v[x] as u16 + self.v[y] as u16;
+                self.v[x] = vx as u8; // avoid overflow
                 // if there is a carry set VF to 1, otherwise set it to 0
-                self.v[15] = if self.v[x] < self.v[y] { 1 } else { 0 };
+                self.v[15] = if vx > 255 { 1 } else { 0 };
             }
             // substract VY from VX
             5 => {
+                let vx: i8 = self.v[x] as i8 - self.v[y] as i8;
+                self.v[x] = vx as u8; // avoid underflow
                 // set VF to 1 if there is a borrow, set it to 0 otherwise
-                self.v[15] = if self.v[x] < self.v[y] { 1 } else { 0 };
-                self.v[x] -= self.v[y];
+                self.v[15] = if vx < 0 { 1 } else { 0 };
             }
             // Shift VX right by one. VF is set to the value of the least
             // significant bit of VX before the shift.
@@ -255,9 +291,10 @@ impl Chip8 {
             }
             // set VX to (VY minus VX)
             7 => {
+                let vx: i8 = self.v[y] as i8 - self.v[x] as i8;
+                self.v[x] = vx as u8; // avoid underflow
                 // VF is set to 0 when there's a borrow, and 1 otherwise
-                self.v[15] = if self.v[y] < self.v[x] { 1 } else { 0 };
-                self.v[x] = self.v[y] - self.v[x];
+                self.v[15] = if vx < 0 { 1 } else { 0 };
             }
             // Shift VX left by one. VF is set to the value of the most
             // significant bit of VX before the shift.
@@ -271,31 +308,72 @@ impl Chip8 {
         self.pc += 2;
     }
 
+    /// Opcode DXYN : draw a sprite at position VX, VY with N bytes of sprite
+    /// data starting at the address stored in I.
+    /// Set VF to 01 if any set pixel was cleared (collision flag), and
+    /// to 00 otherwise.
+    fn draw_sprite(&mut self) {
+        let posx  = self.v[self.get_op_x()] as usize;
+        let posy  = self.v[self.get_op_y()] as usize;
+        //println!("{:?}, {:?}", posx, posy);
+        let start = self.i;
+        let end   = self.i + (self.opcode & 0x000F) as usize;
+        if self.display.draw(posx, posy, &self.memory[start..end]) {
+            self.v[15] = 0x01;
+        } else {
+            self.v[15] = 0x00;
+        }
+    }
+
     /// Opcode FXYZ.
     fn op_fxyz(&mut self) {
         let x = self.get_op_x();
         // match the YZ value
         match self.opcode & 0x00FF {
-            // set VX to the value of the delay timer
+            // FX07 set VX to the value of the delay timer
             0x07 => self.v[x] = self.delay_timer,
-            // wait for a key press and store its index in VX
+            // FX0A : wait for a key press and store its index in VX
             0x0A => {
-                // implementation : block the CPU on this opcode
-                // until any key is pressed
-                for key in 0..16 {
-                    if self.keypad.is_pressed(key).unwrap() {
-                        self.pc += 2;
-                        self.v[x] = key as u8;
-                        break;
-                    }
-                }
+                // implementation : the emulator app must call the
+                // 'end_wait_for_key_press' function
+                // this is needed to achieve better independance from the
+                // framerate
+                self.is_waiting_for_key = true;
                 self.pc -= 2;
             },
-            // set the delay timer to VX
+            // FX15 : set the delay timer to VX
             0x15 => self.delay_timer = self.v[x],
-            // set the sound timer to VX
+            // FX18 : set the sound timer to VX
             0x18 => self.sound_timer = self.v[x],
-            // FX29
+            // FX29 : set I to the location of the sprite for the character
+            // in VX. The characters are thus 0-F.
+            0x29 => {
+                // the font set is in the memory range [0..80]
+                // and each character is represented by 5 bytes
+                self.i = (self.v[x] * 5) as usize;
+            },
+            // FX33 : store the binary-coded decimal equivalent of the value
+            // stored in VX at the addresses I, I+1, and I+2 since VX is a
+            // byte and hence can be a decimal up to 255.
+            0x33 => {
+                let vx = self.v[x];
+                self.memory[self.i]   = vx / 100;
+                self.memory[self.i+1] = (vx / 10)  % 10;
+                self.memory[self.i+2] = (vx % 100) % 10;
+            }
+            // FX55 : store V0 to VX in memory starting at the address I
+            0x55 => {
+                for j in 0..x {
+                    self.memory[self.i + j] = self.v[j];
+                }
+            },
+            // FX65 : fill V0 to VX with values from memory starting at the
+            // address I
+            0x65 => {
+                for j in 0..x {
+                    self.v[j] = self.memory[self.i + j];
+                }
+            }
             _ => op_not_implemented!(self.opcode, self.pc),
         }
         self.pc += 2;
@@ -303,12 +381,12 @@ impl Chip8 {
 
     /// Get the X value in the current opcode of the form 0x-X--.
     fn get_op_x(&self) -> usize {
-        (self.opcode & 0x0F00 >> 8) as usize
+        ((self.opcode & 0x0F00) >> 8) as usize
     }
 
     /// Get the Y value in the current opcode of the form 0x--Y-.
     fn get_op_y(&self) -> usize {
-        (self.opcode & 0x00F0 >> 4) as usize
+        ((self.opcode & 0x00F0) >> 4) as usize
     }
 
     /// Get the NN value in the current opcode of the form 0x--NN.

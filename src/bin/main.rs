@@ -53,10 +53,8 @@ fn main() {
         },
         _ => input::KeyboardBinding::QWERTY,
     };
-    /*let rom_file = if !matches.free.is_empty() { matches.free[0].clone() }
-        else { print_usage(opts); return; };*/
-    // TEST
-    let rom_file = "pong.ch8";
+    let rom_file = if !matches.free.is_empty() { matches.free[0].clone() }
+        else { /*print_usage(opts); return; */ "pong.ch8".to_string() /* TEST */};
 
     // Chip 8 virtual machine creation
     let mut emulator = Chip8Application::new(Chip8Config::new()

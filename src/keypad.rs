@@ -33,8 +33,13 @@ impl Keypad {
     /// Return the state of the key at the given index, or None
     /// if the index is invalid.
     pub fn is_pressed(&self, index: usize) -> Option<bool> {
+        //println!("is_pressed({})", index); // DEBUG
         // TODO : security check necessary ?
         if index < self.keys.len() {
+            // DEBUG
+            if self.keys[index] {
+                println!("acquiring pressed : {:X}", index);
+            }
             Some(self.keys[index])
         } else {
             None
