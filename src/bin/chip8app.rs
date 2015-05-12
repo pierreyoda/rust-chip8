@@ -157,7 +157,7 @@ impl Chip8Application {
         let mut update_timer = 0.0;
         let max_dt = 1000.0 / fps; // target max frametime, in fps
 
-        let max_cycles_per_sec = 100;//self.vm.clock_hz;
+        let max_cycles_per_sec = self.vm.clock_hz;
         let mut cycles = 0; // number of CPU cycles done in the current second
         let mut cycles_t = t;
 
@@ -179,7 +179,7 @@ impl Chip8Application {
             // Event handling
             for event in event_pump.poll_iter() {
                 match event {
-                    Event::Quit {..}          => break 'main,
+                    Event::Quit {..}             => break 'main,
                     Event::KeyDown {keycode, ..} => {
                         // quit on Escape
                         if keycode == KeyCode::Escape {
@@ -220,7 +220,7 @@ impl Chip8Application {
             if !self.vm.is_waiting_for_key && cycles < max_cycles_per_sec {
                 cycles += 1;
                 if self.vm.emulate_cycle() {
-                    info!("The program was ended properly.");
+                    info!("The program ended properly.");
                     break 'main;
                 }
             }
@@ -251,10 +251,10 @@ impl Chip8Application {
                             // since they only change at window resize...
                             if self.vm.display.gfx[y as usize][x as usize] == 1u8 {
                                 let _ = drawer.fill_rect(Rect::new(
-                                                         x * pixel_size,
-                                                         y * pixel_size,
-                                                         pixel_size,
-                                                         pixel_size));
+                                                             x * pixel_size,
+                                                             y * pixel_size,
+                                                             pixel_size,
+                                                             pixel_size));
                             }
                         }
                     }

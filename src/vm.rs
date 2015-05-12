@@ -122,6 +122,10 @@ impl Chip8 {
 
     /// Emulate a Chip8 CPU cycle.
     /// Return true if the loaded program is done.
+    /// TODO : refactor the opcode execution code
+    /// (for improved clarity and to allow unit testing)
+    /// into a set of indidual functions, e.g.
+    /// opcode 9XY0 => skip_if_regs_not_equal(x, y)
     pub fn emulate_cycle(&mut self) -> bool {
         // Is the program finished ?
         if self.pc >= 4094 {
