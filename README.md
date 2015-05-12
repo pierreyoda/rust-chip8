@@ -13,3 +13,14 @@ Created for learning purposes.
 [rust-rand]: https://github.com/rust-lang/rand
 [rust-log]: https://github.com/rust-lang/log
 [rust-getopts]: https://github.com/rust-lang/getopts
+
+# Screenshots
+
+Maze
+
+![Maze](/img/maze.png?raw=true)
+
+# Resources
+The [chip8.com][chip8-roms] website offers a comprehensive collection of game and demo ROMs.
+
+[chip8-roms]: http://www.chip8.com/?page=109
