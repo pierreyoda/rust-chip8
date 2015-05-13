@@ -131,6 +131,11 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
                             tx.send(UpdateRunStatus(paused)).unwrap();
                             paused = !paused;
                         },
+                        // reset on backspace
+                        KeyCode::Backspace => {
+                            info!("Reinitializing the virtual machine.");
+                            tx.send(Reset).unwrap();
+                        },
                         _               => if !paused {
                             match key_binds.get(&keycode) {
                                 Some(index) => {

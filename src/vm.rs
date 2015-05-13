@@ -17,7 +17,7 @@ pub const TIMERS_CLOCK : u32 = 60;
 
 /// The index of the register used for the 'carry flag'.
 /// VF is used according to the CHIP 8 specifications.
-const FLAG             : usize = 15;
+pub const FLAG             : usize = 15;
 /// The size of the stack.
 const STACK_SIZE       : usize = 16;
 
@@ -28,32 +28,32 @@ const STACK_SIZE       : usize = 16;
 /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 pub struct Chip8 {
     /// The current opcode.
-    opcode          : u16,
+    opcode           : u16,
     /// The chip's 4096 bytes of memory.
-    pub memory      : [u8; 4096], // TEMPORARY pub for debug purposes
+    pub memory       : [u8; 4096], // TEMPORARY pub for debug purposes
     /// The chip's 16 registers, from V0 to VF.
     /// VF is used for the 'carry flag'.
-    v               : [u8; 16],
+    pub v            : [u8; 16],
     /// Index register.
-    i               : usize,
+    pub i            : usize,
     /// Program counter.
-    pc              : usize,
+    pub pc           : usize,
     /// The stack, used for subroutine operations.
     /// By default has 16 levels of nesting.
-    stack           : [u16; STACK_SIZE],
+    pub stack        : [u16; STACK_SIZE],
     /// Stack pointer.
-    sp              : usize,
+    pub sp           : usize,
     // Timer registers, must be updated at 60 Hz by the emulator.
-    pub delay_timer : u8,
-    pub sound_timer : u8,
+    pub delay_timer  : u8,
+    pub sound_timer  : u8,
     /// Screen component.
-    pub display     : Display,
+    pub display      : Display,
     /// Input component.
-    pub keypad      : Keypad,
+    pub keypad       : Keypad,
     /// Is the virtual machine waiting for a keypress ?
     /// If so, when any key is pressed store its index in VX where X is
     /// the value stored in this tuple.
-    wait_for_key    : (bool, u8),
+    pub wait_for_key : (bool, u8),
 }
 
 /// Macro for handling invalid/unimplemented opcodes.
@@ -192,7 +192,7 @@ impl Chip8 {
             (0x2, _, _, _)       => self.call_addr(op & 0x0FFF),
             (0x3, x, _, _)       => self.se_vx_nn(x, (op & 0x00FF) as u8),
             (0x4, x, _, _)       => self.sne_vx_nn(x, (op & 0x00FF) as u8),
-            (0x5, x, y, _)       => self.se_vx_vy(x, y),
+            (0x5, x, y, 0x0)     => self.se_vx_vy(x, y),
             (0x6, x, _, _)       => self.ld_vx_nn(x, (op & 0x00FF) as u8),
             (0x7, x, _, _)       => self.add_vx_nn(x, (op & 0x00FF) as u8),
             (0x8, x, y, 0x0)     => self.ld_vx_vy(x, y),

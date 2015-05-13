@@ -52,6 +52,7 @@ fn config_from_matches(matches: &Matches) -> Chip8Config {
     config
 }
 
+#[cfg(not(test))]
 fn main() {
     // Logger initialization
     match logger::init_console_logger() {
