@@ -50,22 +50,9 @@ impl Chip8Config {
     }
 
     config_set_param!(w_title, window_title, &'static str);
-
-    /// Set the window width.
-    pub fn w_width(mut self, width: u16) -> Chip8Config {
-        self.window_width = width; self
-    }
-
-    /// Set the window height.
-    pub fn w_height(mut self, height: u16) -> Chip8Config {
-        self.window_height = height; self
-    }
-
-    /// Set the keyboard configuration.
-    pub fn key_binds(mut self, keyboard: input::KeyboardBinding) -> Chip8Config {
-        self.keypad_binding = keyboard; self
-    }
-
+    config_set_param!(w_width, window_width, u16);
+    config_set_param!(w_height, window_height, u16);
+    config_set_param!(key_binds, keypad_binding, input::KeyboardBinding);
     config_set_param!(vm_cpu_clock, vm_cpu_clock, u32);
 }
 
