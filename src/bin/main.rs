@@ -7,9 +7,11 @@ use getopts::Options;
 extern crate log;
 
 mod chip8app;
+mod chip8app_sdl2;
 mod input;
 mod logger;
-use chip8app::{Chip8Application, Chip8Config};
+use chip8app::{Chip8Emulator, Chip8Config};
+use chip8app_sdl2::Chip8ApplicationSDL2;
 
 fn print_usage(opts: Options) {
     let brief =
@@ -57,11 +59,11 @@ fn main() {
         else { /*print_usage(opts); return; */ "pong.ch8".to_string() /* TEST */};
 
     // Chip 8 virtual machine creation
-    let mut emulator = Chip8Application::new(Chip8Config::new()
-                                             .w_title("rust-chip8 emulator")
-                                             .w_width(800)
-                                             .w_height(600)
-                                             .key_binds(keyboard_config));
+    let mut emulator = Chip8ApplicationSDL2::new(Chip8Config::new()
+        .w_title("rust-chip8 emulator")
+        .w_width(800)
+        .w_height(600)
+        .key_binds(keyboard_config));
 
     // Load the ROM and start the emulation
     let rom_filepath = Path::new(&rom_file);

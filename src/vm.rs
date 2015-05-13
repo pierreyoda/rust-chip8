@@ -9,9 +9,13 @@ use rand::random;
 use display::{Display, FONT_SET};
 use keypad::Keypad;
 
+
+/// The default CPU clock, in Hz.
+pub const CPU_CLOCK : u32 = 600;
+
 /// The index of the register used for the 'carry flag'.
 /// VF is used according to the CHIP 8 specifications.
-const FLAG: usize = 15;
+const FLAG          : usize = 15;
 
 /// CHIP 8 virtual machine.
 /// The references used to implement this particular interpreter include :
@@ -19,9 +23,6 @@ const FLAG: usize = 15;
 /// http://mattmik.com/chip8.html
 /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 pub struct Chip8 {
-    /// The CPU clock frequency, i.e. the number of instructions it can execute
-    /// per second.
-    pub clock_hz    : u32,
     /// The current opcode.
     opcode          : u16,
     /// The chip's 4096 bytes of memory.
@@ -65,7 +66,6 @@ impl Chip8 {
     /// Create and return a new, initialized Chip8 virtual machine.
     pub fn new() -> Chip8 {
         let mut chip8 = Chip8 {
-            clock_hz     : 600,
             opcode       : 0u16,
             memory       : [0u8; 4096],
             v            : [0u8; 16],

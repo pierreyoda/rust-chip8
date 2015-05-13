@@ -37,9 +37,9 @@ impl Keypad {
         // TODO : security check necessary ?
         if index < self.keys.len() {
             // DEBUG
-            if self.keys[index] {
+            /*if self.keys[index] {
                 println!("acquiring pressed : {:X}", index);
-            }
+            }*/
             Some(self.keys[index])
         } else {
             None
