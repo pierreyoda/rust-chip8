@@ -9,6 +9,10 @@ use rand::random;
 use display::{Display, FONT_SET};
 use keypad::Keypad;
 
+/// The index of the register used for the 'carry flag'.
+/// VF is used according to the CHIP 8 specifications.
+const FLAG: usize = 15;
+
 /// CHIP 8 virtual machine.
 /// The references used to implement this particular interpreter include :
 /// http://en.wikipedia.org/wiki/CHIP-8
@@ -17,31 +21,33 @@ use keypad::Keypad;
 pub struct Chip8 {
     /// The CPU clock frequency, i.e. the number of instructions it can execute
     /// per second.
-    pub clock_hz           : u32,
+    pub clock_hz    : u32,
     /// The current opcode.
-    opcode                 : u16,
+    opcode          : u16,
     /// The chip's 4096 bytes of memory.
-    pub memory             : [u8; 4096], // TEMPORARY pub for debug purposes
+    pub memory      : [u8; 4096], // TEMPORARY pub for debug purposes
     /// The chip's 16 registers, from V0 to VF.
     /// VF is used for the 'carry flag'.
-    v                      : [u8; 16],
+    v               : [u8; 16],
     /// Index register.
-    i                      : usize,
+    i               : usize,
     /// Program counter.
-    pc                     : usize,
+    pc              : usize,
     /// The 16-levels stack.
-    stack                  : [u16; 16],
+    stack           : [u16; 16],
     /// Stack pointer.
-    sp                     : usize,
+    sp              : usize,
     // Timer registers, must be updated at 60 Hz by the emulator.
-    pub delay_timer        : u8,
-    pub sound_timer        : u8,
+    pub delay_timer : u8,
+    pub sound_timer : u8,
     /// Screen component.
-    pub display            : Display,
+    pub display     : Display,
     /// Input component.
-    pub keypad             : Keypad,
+    pub keypad      : Keypad,
     /// Is the virtual machine waiting for a keypress ?
-    pub is_waiting_for_key : bool,
+    /// If so, when any key is pressed store its index in VX where X is
+    /// the value stored in this tuple.
+    wait_for_key    : (bool, u8),
 }
 
 /// Macro for handling invalid/unimplemented opcodes.
@@ -59,19 +65,19 @@ impl Chip8 {
     /// Create and return a new, initialized Chip8 virtual machine.
     pub fn new() -> Chip8 {
         let mut chip8 = Chip8 {
-            clock_hz           : 600,
-            opcode             : 0u16,
-            memory             : [0u8; 4096],
-            v                  : [0u8; 16],
-            i                  : 0usize,
-            pc                 : 0usize,
-            stack              : [0u16; 16],
-            sp                 : 0usize,
-            delay_timer        : 0u8,
-            sound_timer        : 0u8,
-            display            : Display::new(),
-            keypad             : Keypad::new(),
-            is_waiting_for_key : false,
+            clock_hz     : 600,
+            opcode       : 0u16,
+            memory       : [0u8; 4096],
+            v            : [0u8; 16],
+            i            : 0usize,
+            pc           : 0usize,
+            stack        : [0u16; 16],
+            sp           : 0usize,
+            delay_timer  : 0u8,
+            sound_timer  : 0u8,
+            display      : Display::new(),
+            keypad       : Keypad::new(),
+            wait_for_key : (false, 0),
         };
         // load the font set in memory in the space [0x0, 0x200[ = [0, 80[
         for i in 0..80 {
@@ -83,16 +89,21 @@ impl Chip8 {
         chip8
     }
 
+    /// Is the CPU waiting for a key press ?
+    pub fn is_waiting_for_key(&self) -> bool {
+        self.wait_for_key.0
+    }
+
     /// Called by the emulator application to inform the virtual machine
     /// waiting for a key pressed that a key has been pressed.
-    pub fn end_wait_for_key_press(&mut self, key_pressed: usize) {
-        if !self.is_waiting_for_key {
+    pub fn end_wait_for_key(&mut self, key_index: usize) {
+        if !self.is_waiting_for_key() {
             warn!(concat!("Chip8::end_wait_for_key_press called but the VM ",
                           "wasn't waiting for a key press - ignoring"));
             return;
         }
-        self.v[self.get_op_x()] = key_pressed as u8;
-        self.is_waiting_for_key = false;
+        self.v[self.wait_for_key.1 as usize] = key_index as u8;
+        self.wait_for_key.0 = false;
         self.pc += 2;
     }
 
@@ -122,285 +133,337 @@ impl Chip8 {
 
     /// Emulate a Chip8 CPU cycle.
     /// Return true if the loaded program is done.
-    /// TODO : refactor the opcode execution code
-    /// (for improved clarity and to allow unit testing)
-    /// into a set of indidual functions, e.g.
-    /// opcode 9XY0 => skip_if_regs_not_equal(x, y)
     pub fn emulate_cycle(&mut self) -> bool {
         // Is the program finished ?
         if self.pc >= 4094 {
             return true;
         }
-        // Fetch and decode the opcode to execute ;
+        // Fetch and execute the opcode to execute ;
         // an opcode being 2 bytes long, we need to read 2 bytes from memory
-        self.opcode = (self.memory[self.pc] as u16) << 8
-                      | (self.memory[self.pc + 1] as u16);
+        let op = (self.memory[self.pc] as u16) << 8
+                 | (self.memory[self.pc + 1] as u16);
 
-        //println!("{:0>4X} {:0>4X}", self.opcode, self.pc);
-
-        // Execute the opcode
-        let op = self.opcode.clone();
-        match self.opcode & 0xF000 {
-            0x0000 => {
-                match self.opcode & 0x00FF {
-                    // 00E0 : clear the screen
-                    0x00E0 => self.display.clear(),
-                    // 00EE : return from a subroutine
-                    0x00EE => {
-                        self.sp -= 1;
-                        self.pc = self.stack[self.sp] as usize;
-                    },
-                    // ignore 0NNN : machine language subroutine at address NNN
-                    _ => op_not_implemented!(self.opcode, self.pc),
-                };
-                self.pc += 2;
-            },
-            // 1NNN : jump the program counter to the NNN address
-            0x1000 => self.jump(op & 0x0FFF),
-            // 2NNN : call subroutine at NNN
-            0x2000 => self.call(op & 0x0FFF),
-            // 3XNN : skip the next instruction if VX equals NN
-            0x3000 => {
-                if self.v[self.get_op_x()] == self.get_op_nn() {
-                    self.pc += 2;
-                }
-                self.pc += 2;
-            },
-            // 4XNN : skip the next instruction if VX doesn't equal NN
-            0x4000 => {
-                if self.v[self.get_op_x()] != self.get_op_nn() {
-                    self.pc += 2;
-                }
-                self.pc += 2;
-            },
-            // 5XY0 : skip the next instruction if VX equals VY
-            0x5000 => {
-                self.pc += 2;
-                if self.v[self.get_op_x()] == self.v[self.get_op_y()] {
-                    self.pc += 2;
-                }
-            },
-            // 6XNN : set VX to NN
-            0x6000 => {
-                self.v[self.get_op_x()] = self.get_op_nn();
-                self.pc += 2;
-            },
-            // 7XNN : add NN to VX
-            // wrap the value around 256 if needed
-            0x7000 => {
-                let vx: u16 = self.v[self.get_op_x()] as u16 +
-                    self.get_op_nn() as u16; // avoid u8 overflow with u16
-                self.v[self.get_op_x()] = vx as u8;
-                self.pc += 2;
-            },
-            // 8XYZ : arithmetic operations on VX and VY
-            0x8000 => self.op_8xyz(),
-            // 9XY0 : skip the next instruction if VX doesn't equal VY
-            0x9000 => {
-                if self.v[self.get_op_x()] != self.v[self.get_op_y()] {
-                    self.pc += 2;
-                }
-                self.pc += 2;
-            }
-            // ANNN : set I to the address NNN
-            0xA000 => {
-                self.i = (op & 0x0FFF) as usize;
-                self.pc += 2;
-            },
-            // BNNN : jump to the adress (NNN+V0)
-            0xB000 => {
-                let v0 = self.v[0] as u16;
-                self.jump(op & 0x0FFF + v0);
-            },
-            // CXNN : sets VX to a random number, masked by NN
-            0xC000 => {
-                self.v[self.get_op_x()] = random::<u8>() & self.get_op_nn();
-                self.pc += 2;
-            },
-            // DXYN : draw sprite
-            0xD000 => { self.draw_sprite(); self.pc += 2; },
-            // EX9E / EXA1 : input
-            0xE000 => {
-                let keypad_index = self.v[self.get_op_x()] as usize;
-                match self.opcode & 0x00FF {
-                    // skip the next instruction if the key at index VX is pressed
-                    0x009E => {
-                        if self.keypad.is_pressed(keypad_index).unwrap() {
-                            self.pc += 2;
-                        }
-                    },
-                    // skip the next instruction if the key at index VX isn't pressed
-                    0x00A1 => {
-                        if !self.keypad.is_pressed(keypad_index).unwrap() {
-                            self.pc += 2;
-                        }
-                    }
-                    // unknown opcode
-                    _ => op_not_implemented!(self.opcode, self.pc),
-                }
-                self.pc += 2;
-            },
-            // FXYZ
-            0xF000 => self.op_fxyz(),
-            _ => op_not_implemented!(self.opcode, self.pc),
-        };
-
+        // println!("{:0>4X} {:0>4X}", self.opcode, self.pc); // DEBUG
+        self.opcode = op;
+        self.execute_opcode(op);
         false
     }
 
-    /// Jump to the 0x0NNN adress contained in the current opcode.
-    fn jump(&mut self, address: u16) {
-        self.pc = address as usize;
+    /// Execute a single opcode.
+    pub fn execute_opcode(&mut self, op: u16) {
+        // For easier matching, get the values (nibbles) A, B, C, D
+        // if the opcode is 0xABCD.
+        let opcode_tuple = (
+            ((op & 0xF000) >> 12) as u8,
+            ((op & 0x0F00) >> 8)  as u8,
+            ((op & 0x00F0) >> 4)  as u8,
+            (op & 0x000F)         as u8);
+
+        //println!("{:0>4X}/{:X},{:X},{:X},{:X}", self.opcode, a, b, c, d);
+
+        // Opcode decoding
+        match opcode_tuple
+        {
+            (0x0, 0x0, 0xE, 0x0) => self.cls(),
+            (0x0, 0x0, 0xE, 0xE) => self.ret(),
+            // 0NNN = sys addr : ignore
+            (0x1, _, _, _)       => self.jump_addr(op & 0x0FFF),
+            (0x2, _, _, _)       => self.call_addr(op & 0x0FFF),
+            (0x3, x, _, _)       => self.se_vx_nn(x, (op & 0x00FF) as u8),
+            (0x4, x, _, _)       => self.sne_vx_nn(x, (op & 0x00FF) as u8),
+            (0x5, x, y, _)       => self.se_vx_vy(x, y),
+            (0x6, x, _, _)       => self.ld_vx_nn(x, (op & 0x00FF) as u8),
+            (0x7, x, _, _)       => self.add_vx_nn(x, (op & 0x00FF) as u8),
+            (0x8, x, y, 0x0)     => self.ld_vx_vy(x, y),
+            (0x8, x, y, 0x1)     => self.or_vx_vy(x, y),
+            (0x8, x, y, 0x2)     => self.and_vx_vy(x, y),
+            (0x8, x, y, 0x3)     => self.xor_vx_vy(x, y),
+            (0x8, x, y, 0x4)     => self.add_vx_vy(x, y),
+            (0x8, x, y, 0x5)     => self.sub_vx_vy(x, y),
+            (0x8, x, y, 0x6)     => self.shr_vx_vy(x, y),
+            (0x8, x, y, 0x7)     => self.subn_vx_vy(x, y),
+            (0x8, x, y, 0xE)     => self.shl_vx_vy(x, y),
+            (0x9, x, y, 0x0)     => self.sne_vx_vy(x, y),
+            (0xA, _, _, _)       => self.ld_i_addr(op & 0x0FFF),
+            (0xB, _, _, _)       => {
+                let v0 = self.v[0] as u16; // sacrifice to the god of borrows
+                self.jump_addr(op & 0x0FFF + v0);
+            },
+            (0xC, x, _, _)       => self.rnd_vx_nn(x, (op & 0x00FF) as u8),
+            (0xD, x, y, n)       => self.drw_vx_vy_n(x, y, n),
+            (0xE, x, 0x9, 0xE)   => self.skp_vx(x),
+            (0xE, x, 0xA, 0x1)   => self.sknp_vx(x),
+            (0xF, x, 0x0, 0x7)   => self.ld_vx_dt(x),
+            (0xF, x, 0x0, 0xA)   => self.ld_vx_key(x),
+            (0xF, x, 0x1, 0x5)   => self.ld_dt_vx(x),
+            (0xF, x, 0x1, 0x8)   => self.ld_st_vx(x),
+            (0xF, x, 0x1, 0xE)   => self.add_i_vx(x),
+            (0xF, x, 0x2, 0x9)   => self.ld_i_font_vx(x),
+            (0xF, x, 0x3, 0x3)   => self.ld_mem_i_bcd_vx(x),
+            (0xF, x, 0x5, 0x5)   => self.ld_mem_i_regs(x),
+            (0xF, x, 0x6, 0x5)   => self.ld_regs_mem_i(x),
+            _ => op_not_implemented!(op, self.pc),
+        }
     }
 
-    /// Opcode 2NNN : call the subroutine at the provided address by storing
-    /// the current program counter in the current stack level and jumping to
-    /// 0x0NNN.
-    // TODO : handle stack overflow ?
-    fn call(&mut self, address: u16) {
+    /// Clear the screen.
+    fn cls(&mut self) {
+        self.display.clear();
+        self.pc += 2;
+    }
+
+    /// Return from a subroutine, by setting the program counter to the address
+    /// popped from the stack.
+    fn ret(&mut self) {
+        self.sp -= 1;
+        let addr = self.stack[self.sp];
+        self.jump_addr(addr);
+        self.pc += 2;
+    }
+
+    /// Jump to the given address of the form 0x0NNN.
+    fn jump_addr(&mut self, addr: u16) {
+        self.pc = addr as usize;
+    }
+
+    /// Execute the subroutine at the provided address pushing the current
+    /// program counter to the stack and jumping to the given address of the
+    /// form 0x0NNN.
+    /// TODO : handle stack overflow error ?
+    fn call_addr(&mut self, addr: u16) {
         self.stack[self.sp] = self.pc as u16;
         self.sp += 1;
-        self.jump(address);
+        self.jump_addr(addr);
     }
 
-    /// Opcode 8XYZ.
-    fn op_8xyz(&mut self) {
-        let x = self.get_op_x();
-        let y = self.get_op_y();
-        // match the Z value
-        match self.opcode & 0x000F {
-            // 8XY0 : set VX to the value of VY
-            0 => self.v[x] = self.v[y],
-            // 8XY1 : sets VX to (VX or VY)
-            1 => self.v[x] |= self.v[y],
-            // 8XY2 : set VX to (VX and VY)
-            2 => self.v[x] &= self.v[y],
-            // 8XY3 : set VX to (VX xor VY)
-            3 => self.v[x] ^= self.v[y],
-            // 8XY4 : add VY to VX
-            4 => {
-                let vx: u16 = self.v[x] as u16 + self.v[y] as u16;
-                self.v[x] = vx as u8; // avoid overflow
-                // if there is a carry set VF to 1, otherwise set it to 0
-                self.v[15] = if vx > 255 { 1 } else { 0 };
-            }
-            // 8XY5 : substract VY from VX
-            5 => {
-                let vx: i8 = self.v[x] as i8 - self.v[y] as i8;
-                self.v[x] = vx as u8; // avoid underflow
-                // set VF to 1 if there is a borrow, set it to 0 otherwise
-                self.v[15] = if vx < 0 { 1 } else { 0 };
-            }
-            // 8XY6 : shift VX right by one. VF is set to the value of the
-            // least significant bit of VX before the shift.
-            6 => {
-                self.v[15] = self.v[x] & 0b0001;
-                self.v[x] >>= 1;
-            }
-            // 8XY7 : set VX to (VY minus VX)
-            7 => {
-                let vx: i8 = self.v[y] as i8 - self.v[x] as i8;
-                self.v[x] = vx as u8; // avoid underflow
-                // VF is set to 0 when there's a borrow, and 1 otherwise
-                self.v[15] = if vx < 0 { 1 } else { 0 };
-            }
-            // 8XYE : shift VX left by one. VF is set to the value of the most
-            // significant bit of VX before the shift.
-            0xE => {
-                self.v[15] = self.v[x] & 0b1000;
-                self.v[x] <<= 1;
-            }
-            // unknown Z
-            _ => op_not_implemented!(self.opcode, self.pc),
-        }
-        self.pc += 2;
+    /// Skip the next instruction if the value of register VX is equal to 0xNN.
+    fn se_vx_nn(&mut self, x: u8, nn: u8) {
+        self.pc += if self.v[x as usize] == nn { 4 } else { 2 };
     }
 
-    /// Opcode DXYN : draw a sprite at position VX, VY with N bytes of sprite
-    /// data starting at the address stored in I.
-    /// Set VF to 01 if any set pixel was cleared (collision flag), and
-    /// to 00 otherwise.
-    fn draw_sprite(&mut self) {
-        let posx  = self.v[self.get_op_x()] as usize;
-        let posy  = self.v[self.get_op_y()] as usize;
-        //println!("{:?}, {:?}", posx, posy);
-        let start = self.i;
-        let end   = self.i + (self.opcode & 0x000F) as usize;
-        if self.display.draw(posx, posy, &self.memory[start..end]) {
-            self.v[15] = 0x01;
+    /// Skip the next instruction if the value of register VX isn't equal to
+    /// 0xNN.
+    fn sne_vx_nn(&mut self, x: u8, nn: u8) {
+        self.pc += if self.v[x as usize] != nn { 4 } else { 2 };
+    }
+
+    /// Skip the next instruction if the value of register VX is equal to the
+    /// value of register VY.
+    fn se_vx_vy(&mut self, x: u8, y: u8) {
+        self.pc += if self.v[x as usize] == self.v[y as usize] { 4 } else { 2 };
+    }
+
+    /// Skip the next instruction if the value of register VX is not equal to
+    /// the value of register VY.
+    fn sne_vx_vy(&mut self, x: u8, y: u8) {
+        self.pc += if self.v[x as usize] != self.v[y as usize] { 4 } else { 2 };
+    }
+
+    /// Skip the next instruction if the key of index VX is currently pressed.
+    fn skp_vx(&mut self, x: u8) {
+        if self.keypad.is_pressed(self.v[x as usize] as usize).unwrap() {
+            self.pc += 4;
         } else {
-            self.v[15] = 0x00;
+            self.pc += 2;
         }
     }
 
-    /// Opcode FXYZ.
-    fn op_fxyz(&mut self) {
-        let x = self.get_op_x();
-        // match the YZ value
-        match self.opcode & 0x00FF {
-            // FX07 set VX to the value of the delay timer
-            0x07 => self.v[x] = self.delay_timer,
-            // FX0A : wait for a key press and store its index in VX
-            0x0A => {
-                // implementation : the emulator app must call the
-                // 'end_wait_for_key_press' function
-                // this is needed to achieve better independance from the
-                // framerate
-                self.is_waiting_for_key = true;
-                self.pc -= 2;
-            },
-            // FX15 : set the delay timer to VX
-            0x15 => self.delay_timer = self.v[x],
-            // FX18 : set the sound timer to VX
-            0x18 => self.sound_timer = self.v[x],
-            // FX1E : add VX to I
-            0x1E => self.i += self.v[x] as usize,
-            // FX29 : set I to the location of the sprite for the character
-            // in VX. The characters are thus 0-F.
-            0x29 => {
-                // the font set is in the memory range [0..80]
-                // and each character is represented by 5 bytes
-                self.i = (self.v[x] * 5) as usize;
-            },
-            // FX33 : store the binary-coded decimal equivalent of the value
-            // stored in VX at the addresses I, I+1, and I+2 since VX is a
-            // byte and hence can be a decimal up to 255.
-            0x33 => {
-                let vx = self.v[x];
-                self.memory[self.i]   = vx / 100;
-                self.memory[self.i+1] = (vx / 10)  % 10;
-                self.memory[self.i+2] = (vx % 100) % 10;
-            }
-            // FX55 : store V0 to VX in memory starting at the address I
-            0x55 => {
-                for j in 0..x {
-                    self.memory[self.i + j] = self.v[j];
-                }
-            },
-            // FX65 : fill V0 to VX with values from memory starting at the
-            // address I
-            0x65 => {
-                for j in 0..x {
-                    self.v[j] = self.memory[self.i + j];
-                }
-            }
-            _ => op_not_implemented!(self.opcode, self.pc),
+    /// Skip the next instruction if the key of index VX is not currently
+    /// pressed.
+    fn sknp_vx(&mut self, x: u8) {
+        if self.keypad.is_pressed(self.v[x as usize] as usize).unwrap() {
+            self.pc += 2;
+        } else {
+            self.pc += 4;
+        }
+    }
+
+    /// Store the value 0xNN in the the register VX.
+    fn ld_vx_nn(&mut self, x: u8, nn: u8) {
+        self.v[x as usize] = nn;
+        self.pc += 2;
+    }
+
+    /// Store the value of the register VY in the register VX.
+    fn ld_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[x as usize] = self.v[y as usize];
+        self.pc += 2;
+    }
+
+    /// Store the memory address 0x0NNN in the register I.
+    fn ld_i_addr(&mut self, addr: u16) {
+        self.i = addr as usize;
+        self.pc += 2;
+    }
+
+    /// Add the value 0xNN to the register VX, wrapping around the result if
+    /// needed (VX is an unsigned byte so its maximum value is 255).
+    fn add_vx_nn(&mut self, x: u8, nn: u8) {
+        let new_vx_u16 = self.v[x as usize] as u16 + nn as u16; // no overflow
+        self.v[x as usize] = new_vx_u16 as u8; // wrap around the value
+        self.pc += 2;
+    }
+
+    /// Add the value of register VX to the value of register I.
+    fn add_i_vx(&mut self, x: u8) {
+        self.i += self.v[x as usize] as usize;
+        self.pc += 2;
+    }
+
+    /// Set VX to (VX OR VY).
+    fn or_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[x as usize] |= self.v[y as usize];
+        self.pc += 2;
+    }
+
+    /// Set VX to (VX AND VY).
+    fn and_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[x as usize] &= self.v[y as usize];
+        self.pc += 2;
+    }
+
+    /// Set VX to (VX XOR VY).
+    fn xor_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[x as usize] ^= self.v[y as usize];
+        self.pc += 2;
+    }
+
+    /// Add the value of register VY to the value of register VX.
+    /// Set V_FLAG to 0x1 if a carry occurs, and to 0x0 otherwise.
+    fn add_vx_vy(&mut self, x: u8, y: u8) {
+        let new_vx_u16 = self.v[x as usize] as u16 + self.v[y as usize] as u16;
+        self.v[x as usize] = new_vx_u16 as u8;
+        self.v[FLAG] = if new_vx_u16 > 255 { 0x1 } else { 0x0 };
+        self.pc += 2;
+    }
+
+    /// Substract the value of register VY from the value of register VX, and
+    /// store the (wrapped) result in register VX.
+    /// Set V_FLAG to 0x1 if a borrow occurs, and to 0x0 otherwise.
+    fn sub_vx_vy(&mut self, x: u8, y: u8) {
+        let new_vx_i8 = self.v[x as usize] as i8 - self.v[y as usize] as i8;
+        self.v[x as usize] = new_vx_i8 as u8;
+        self.v[FLAG] = if new_vx_i8 < 0 { 0x1 } else { 0x0 };
+        self.pc += 2;
+    }
+
+    /// Substract the value of register VX from the value of register VY, and
+    /// store the (wrapped) result in register VX.
+    /// Set V_FLAG to 0x1 if a borrow occurs, and to 0x0 otherwise.
+    fn subn_vx_vy(&mut self, x: u8, y: u8) {
+        let new_vx_i8 = self.v[y as usize] as i8 - self.v[x as usize] as i8;
+        self.v[x as usize] = new_vx_i8 as u8;
+        self.v[FLAG] = if new_vx_i8 < 0 { 0x1 } else { 0x0 };
+        self.pc += 2;
+    }
+
+    /// Store the value of the register VY shifted right one bit in register VX
+    /// and set register VF to the most significant bit prior to the shift.
+    /// NB : references disagree on this opcode, we use the one defined here :
+    /// http://mattmik.com/chip8.html
+    fn shr_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[FLAG] = self.v[x as usize] & 0x01;
+        self.v[x as usize] = self.v[y as usize] >> 1;
+        self.pc += 2;
+    }
+
+    /// Same as 'shr_vx_vy' but with a left shift.
+    fn shl_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[FLAG] = self.v[x as usize] & 0x01;
+        self.v[x as usize] = self.v[y as usize] << 1;
+        self.pc += 2;
+    }
+
+    /// Set VX to a random byte with a mask of 0xNN.
+    fn rnd_vx_nn(&mut self, x: u8, nn: u8) {
+        self.v[x as usize] = random::<u8>() & nn;
+        self.pc += 2;
+    }
+
+    /// Draw a sprite at position VX, VY with 0xN bytes of sprite data starting
+    /// at the address stored in I. N is thus the height of the sprite.
+    /// The drawing is implemented by 'Display' as a XOR operation.
+    /// VF will act here as a collision flag, i.e. if any set pixel is erased
+    /// set it to 0x1, and to 0x0 otherwise.
+    fn drw_vx_vy_n(&mut self, x: u8, y: u8, n: u8) {
+        let pos_x     = self.v[x as usize] as usize;
+        let pos_y     = self.v[y as usize] as usize;
+        let mem_start = self.i;
+        let mem_end   = self.i + n as usize;
+        if self.display.draw(pos_x, pos_y, &self.memory[mem_start..mem_end]) {
+            self.v[FLAG] = 0x1;
+        } else {
+            self.v[FLAG] = 0x0;
         }
         self.pc += 2;
     }
 
-    /// Get the X value in the current opcode of the form 0x-X--.
-    fn get_op_x(&self) -> usize {
-        ((self.opcode & 0x0F00) >> 8) as usize
+    /// Store the current value of the delay timer in register VX.
+    fn ld_vx_dt(&mut self, x: u8) {
+        self.v[x as usize] = self.delay_timer;
+        self.pc += 2;
     }
 
-    /// Get the Y value in the current opcode of the form 0x--Y-.
-    fn get_op_y(&self) -> usize {
-        ((self.opcode & 0x00F0) >> 4) as usize
+    /// Set the delay timer to the value stored in register VX.
+    fn ld_dt_vx(&mut self, x: u8) {
+        self.delay_timer = self.v[x as usize];
+        self.pc += 2;
     }
 
-    /// Get the NN value in the current opcode of the form 0x--NN.
-    fn get_op_nn(&self) -> u8 {
-        (self.opcode & 0x00FF) as u8
+    /// Set the sound timer to the value stored in register VX.
+    fn ld_st_vx(&mut self, x: u8) {
+        self.sound_timer = self.v[x as usize];
+        self.pc += 2;
+    }
+
+    /// Wait for a key press and store the result in the register VX.
+    /// Implementation : the emulation application must trigger the
+    /// 'end_wait_for_key_press' function ; this allows to achieve better
+    /// decoupling from the framerate.
+    fn ld_vx_key(&mut self, x: u8) {
+        self.wait_for_key = (true, x);
+    }
+
+    /// Set I to the memory address of the sprite data corresponding to the
+    /// hexadecimal digit (0x0..0xF) stored in register VX.
+    /// Will use the internal fontset stored in memory.
+    fn ld_i_font_vx(&mut self, x: u8) {
+        // the font set is in the memory range 0x0..0x80
+        // and each character is represented by 5 bytes
+        self.i = (self.v[x as usize] * 5) as usize;
+        self.pc += 2;
+    }
+
+    /// Store the Binary-Coded Decimal equivalent of the value stored in
+    /// register VX in memory at the addresses I, I+1, and I+2.
+    fn ld_mem_i_bcd_vx(&mut self, x: u8) {
+        // VX is a byte : its decimal value is in 0..256
+        let vx = self.v[x as usize];
+        self.memory[self.i]   = vx / 100;
+        self.memory[self.i+1] = (vx / 10)  % 10;
+        self.memory[self.i+2] = (vx % 100) % 10;
+        self.pc += 2;
+    }
+
+    /// Store the values of registers V0 to VX inclusive in memory starting at
+    /// the address I, and set I to I + X + 1 after operation.
+    fn ld_mem_i_regs(&mut self, x: u8) {
+        let x_usize = x as usize;
+        for j in 0..x_usize {
+            self.memory[self.i + j] = self.v[j];
+        }
+        self.i += x_usize + 1;
+        self.pc += 2;
+    }
+
+    /// Fill registers V0 to VX inclusive with the values stored in memory
+    /// starting at the address I.
+    fn ld_regs_mem_i(&mut self, x: u8) {
+        let x_usize = x as usize;
+        for j in 0..x_usize {
+            self.v[j] = self.memory[self.i + j];
+        }
+        self.i += x_usize + 1;
+        self.pc += 2;
     }
 }

@@ -188,13 +188,13 @@ impl Chip8Application {
                         // keypad emulation
                         match key_binds.get(&keycode) {
                             Some(index) => {
-                                if !self.vm.is_waiting_for_key {
+                                if !self.vm.is_waiting_for_key() {
                                     if *index != last_pressed {
                                         self.vm.keypad.pressed(*index);
                                     }
                                     last_pressed = *index;
                                 } else {
-                                    self.vm.end_wait_for_key_press(*index);
+                                    self.vm.end_wait_for_key(*index);
                                 }
                             },
                             _           => {},
@@ -217,7 +217,7 @@ impl Chip8Application {
                 cycles_t = t;
                 cycles = 0;
             }
-            if !self.vm.is_waiting_for_key && cycles < max_cycles_per_sec {
+            if !self.vm.is_waiting_for_key() && cycles < max_cycles_per_sec {
                 cycles += 1;
                 if self.vm.emulate_cycle() {
                     info!("The program ended properly.");
