@@ -7,15 +7,19 @@ use std::path::Path;
 use rand::random;
 
 use display::{Display, FONT_SET};
-use keypad::Keypad;
+use keypad::{Keypad, Keystate};
 
 
 /// The default CPU clock, in Hz.
-pub const CPU_CLOCK : u32 = 600;
+pub const CPU_CLOCK    : u32 = 600;
+/// The timers clock, in Hz.
+pub const TIMERS_CLOCK : u32 = 60;
 
 /// The index of the register used for the 'carry flag'.
 /// VF is used according to the CHIP 8 specifications.
-const FLAG          : usize = 15;
+const FLAG             : usize = 15;
+/// The size of the stack.
+const STACK_SIZE       : usize = 16;
 
 /// CHIP 8 virtual machine.
 /// The references used to implement this particular interpreter include :
@@ -34,8 +38,9 @@ pub struct Chip8 {
     i               : usize,
     /// Program counter.
     pc              : usize,
-    /// The 16-levels stack.
-    stack           : [u16; 16],
+    /// The stack, used for subroutine operations.
+    /// By default has 16 levels of nesting.
+    stack           : [u16; STACK_SIZE],
     /// Stack pointer.
     sp              : usize,
     // Timer registers, must be updated at 60 Hz by the emulator.
@@ -71,13 +76,13 @@ impl Chip8 {
             v            : [0u8; 16],
             i            : 0usize,
             pc           : 0usize,
-            stack        : [0u16; 16],
+            stack        : [0u16; STACK_SIZE],
             sp           : 0usize,
             delay_timer  : 0u8,
             sound_timer  : 0u8,
             display      : Display::new(),
             keypad       : Keypad::new(),
-            wait_for_key : (false, 0),
+            wait_for_key : (false, 0x0),
         };
         // load the font set in memory in the space [0x0, 0x200[ = [0, 80[
         for i in 0..80 {
@@ -87,6 +92,22 @@ impl Chip8 {
         chip8.pc = 0x200;
 
         chip8
+    }
+
+    /// Reinitialize the virtual machine's state but keep the loaded program
+    /// in memory.
+    pub fn reset(&mut self) {
+        self.opcode       = 0u16;
+        self.v            = [0u8; 16];
+        self.i            = 0usize;
+        self.pc           = 0x200;
+        self.stack        = [0u16; STACK_SIZE];
+        self.sp           = 0usize;
+        self.delay_timer  = 0u8;
+        self.sound_timer  = 0u8;
+        self.display      = Display::new();
+        self.keypad       = Keypad::new();
+        self.wait_for_key = (false, 0x0);
     }
 
     /// Is the CPU waiting for a key press ?
@@ -261,21 +282,18 @@ impl Chip8 {
 
     /// Skip the next instruction if the key of index VX is currently pressed.
     fn skp_vx(&mut self, x: u8) {
-        if self.keypad.is_pressed(self.v[x as usize] as usize).unwrap() {
-            self.pc += 4;
-        } else {
-            self.pc += 2;
-        }
+        self.pc += match self.keypad.get_key_state(self.v[x as usize] as usize) {
+                Keystate::Pressed  => 4,
+                Keystate::Released => 2,
+            };
     }
 
-    /// Skip the next instruction if the key of index VX is not currently
-    /// pressed.
+    /// Skip the next instruction if the key of index VX is currently released.
     fn sknp_vx(&mut self, x: u8) {
-        if self.keypad.is_pressed(self.v[x as usize] as usize).unwrap() {
-            self.pc += 2;
-        } else {
-            self.pc += 4;
-        }
+        self.pc += match self.keypad.get_key_state(self.v[x as usize] as usize) {
+                Keystate::Pressed  => 2,
+                Keystate::Released => 4,
+            };
     }
 
     /// Store the value 0xNN in the the register VX.

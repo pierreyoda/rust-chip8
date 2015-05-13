@@ -1,8 +1,13 @@
 use std::env;
 use std::error::Error;
 use std::path::Path;
+
 extern crate getopts;
-use getopts::Options;
+use getopts::{Options, Matches};
+
+// we need a backend-agnostic time handling for the VM
+extern crate time;
+
 #[macro_use]
 extern crate log;
 
@@ -10,13 +15,41 @@ mod chip8app;
 mod chip8app_sdl2;
 mod input;
 mod logger;
-use chip8app::{Chip8Emulator, Chip8Config};
-use chip8app_sdl2::Chip8ApplicationSDL2;
+use chip8app::{Chip8Emulator, Chip8EmulatorBackend, Chip8Config};
+use chip8app_sdl2::Chip8BackendSDL2;
 
 fn print_usage(opts: Options) {
     let brief =
         "rust-chip8 emulator.\n\nUsage:\n   rust-chip8 [OPTIONS] ROM_FILE\n";
     println!("{}", opts.usage(&brief));
+}
+
+fn config_from_matches(matches: &Matches) -> Chip8Config {
+    let mut config = Chip8Config::new();
+
+    let keyboard_config = match matches.opt_str("k") {
+        Some(ref string) => match &string[..] {
+            "QWERTY" => input::KeyboardBinding::QWERTY,
+            "AZERTY" => input::KeyboardBinding::AZERTY,
+            _        => {
+                warn!("unrecognized keyboard configuration argument \"{}\".",
+                      string);
+                input::KeyboardBinding::QWERTY
+            },
+        },
+        _ => input::KeyboardBinding::QWERTY,
+    };
+
+    match matches.opt_str("c") {
+        Some(ref string) => match string.parse::<u32>() {
+            Ok(cpu_clock) => { config = config.vm_cpu_clock(cpu_clock); }
+            Err(_)        => warn!("\"{}\" is not a valid CPU clock number",
+                                     string),
+        },
+        _ => {},
+    }
+
+    config
 }
 
 fn main() {
@@ -32,6 +65,9 @@ fn main() {
 
     let mut opts = Options::new();
     opts.optflag("h", "help", "Print this help menu.");
+    opts.optopt("c", "cpu-clock",
+                "The CPU clock speed to target. 600 Hz by default.",
+                "CPU_CLOCK_SPEED");
     opts.optopt("k", "keyboard",
                 "The keyboard configuration to use. QWERTY by default.",
                 "QWERTY/AZERTY");
@@ -43,32 +79,20 @@ fn main() {
         print_usage(opts);
         return;
     }
-    let keyboard_config = match matches.opt_str("k") {
-        Some(ref string) => match &string[..] {
-            "QWERTY" => input::KeyboardBinding::QWERTY,
-            "AZERTY" => input::KeyboardBinding::AZERTY,
-            _        => {
-                warn!("unrecognized keyboard configuration argument \"{}\".",
-                      string);
-                input::KeyboardBinding::QWERTY
-            },
-        },
-        _ => input::KeyboardBinding::QWERTY,
-    };
     let rom_file = if !matches.free.is_empty() { matches.free[0].clone() }
-        else { /*print_usage(opts); return; */ "pong.ch8".to_string() /* TEST */};
+        else { print_usage(opts); return; };
 
     // Chip 8 virtual machine creation
-    let mut emulator = Chip8ApplicationSDL2::new(Chip8Config::new()
+    let config =  config_from_matches(&matches)
         .w_title("rust-chip8 emulator")
         .w_width(800)
-        .w_height(600)
-        .key_binds(keyboard_config));
+        .w_height(600);
+    let mut emulator = Chip8Emulator::new(config,
+        Box::new(Chip8BackendSDL2) as Box<Chip8EmulatorBackend>);
 
     // Load the ROM and start the emulation
     let rom_filepath = Path::new(&rom_file);
-    if !emulator.load_rom(&rom_filepath) {
-        panic!("error while loading the ROM.");
+    if !emulator.run_rom(&rom_filepath) {
+        panic!("error while loading or running the ROM.");
     }
-    emulator.run();
 }

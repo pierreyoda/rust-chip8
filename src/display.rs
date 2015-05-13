@@ -15,6 +15,7 @@ pub const DISPLAY_HEIGHT : u16 = 32;
 /// |(0,31)    (63,31)|
 /// ∨-----------------.
 /// Y
+#[derive(Clone)]
 pub struct Display {
     /// 64x32 black and white screen.
     /// 'gfx[i]' contains the pixel column number 'i'.

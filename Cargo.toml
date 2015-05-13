@@ -11,6 +11,7 @@ name = "chip8vm"
 patch = "src/lib.rs"
 
 [dependencies]
+time = "0.1.25"
 log = "0.3.1"
 getopts = "0.2.10"
 rand = "0.3.8"

@@ -17,50 +17,38 @@
 /// source :
 /// http://www.multigesture.net/articles/how-to-write-an-emulator-chip-8-interpreter/
 ///
+
+/// The possible status for a key of the virtual keypad.
+#[derive(Copy, Clone, Debug)]
+pub enum Keystate {
+    Pressed,
+    Released,
+}
+
 pub struct Keypad {
     /// The state of the 16 keys (true = currently pressed).
-    keys: [bool; 16],
+    keys: [Keystate; 16],
 }
 
 impl Keypad {
     /// Create and return a new Keypad instance.
     pub fn new() -> Keypad {
         Keypad {
-            keys: [false; 16]
+            keys: [Keystate::Released; 16]
         }
     }
 
-    /// Return the state of the key at the given index, or None
-    /// if the index is invalid.
-    pub fn is_pressed(&self, index: usize) -> Option<bool> {
-        //println!("is_pressed({})", index); // DEBUG
-        // TODO : security check necessary ?
-        if index < self.keys.len() {
-            // DEBUG
-            /*if self.keys[index] {
-                println!("acquiring pressed : {:X}", index);
-            }*/
-            Some(self.keys[index])
-        } else {
-            None
-        }
+    /// Return the state of the key at the given index.
+    pub fn get_key_state(&self, index: usize) -> Keystate {
+        //println!("get_key_state({:X})", index); // DEBUG
+        debug_assert!(index < 16);
+        self.keys[index]
     }
 
-    /// Set the key at the given index as currently pressed.
-    pub fn pressed(&mut self, index: usize) {
-        // DEBUG
+    /// Set the current key state for the key at the given index.
+    pub fn set_key_state(&mut self, index: usize, state: Keystate) {
+        //println!("set_key_state({:X}, {:?})", index, state); // DEBUG
         debug_assert!(index < 16);
-        //println!("pressed {:X}", index);
-
-        self.keys[index] = true;
-    }
-
-    /// Set the key at the given index as currently not pressed.
-    pub fn released(&mut self, index: usize) {
-        // DEBUG
-        debug_assert!(index < 16);
-        //println!("released {:X}", index);
-
-        self.keys[index] = false;
+        self.keys[index] = state;
     }
 }
