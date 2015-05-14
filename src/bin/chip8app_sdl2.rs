@@ -13,7 +13,7 @@ extern crate chip8vm;
 use self::chip8vm::display::{Display, DISPLAY_WIDTH, DISPLAY_HEIGHT};
 use self::chip8vm::keypad::Keystate::{Released, Pressed};
 use super::chip8app::{Chip8EmulatorBackend, Chip8Config, Chip8VMCommand,
-    Chip8UICommand, terminate_vm, get_display_size};
+    Chip8UICommand, get_display_size};
 use super::chip8app::Chip8VMCommand::*;
 use super::chip8app::Chip8UICommand::*;
 use super::input;
@@ -92,7 +92,7 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
 
         let mut event_pump = sdl_context.event_pump();
         let key_binds = input::get_sdl_key_bindings(&config.keypad_binding);
-        // avoid multiple redundant 'pressed' events
+        // avoid spamming the channel with redundant 'pressed' events
         // does not work with multiple keys pressed at the exact same time
         let mut last_key_pressed = 0xFF_usize; // invalid value by default
 
@@ -118,12 +118,13 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit {..}             => {
-                        terminate_vm(tx, rx);
-                        break 'main;
+                        paused = true;
+                        tx.send(Quit).unwrap();
                     },
                     Event::KeyDown {keycode, ..} => match keycode {
                         // quit on Escape
                         KeyCode::Escape => {
+                            paused = true;
                             tx.send(Quit).unwrap();
                         },
                         // toggle pause on Return
@@ -136,7 +137,7 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
                             info!("Reinitializing the virtual machine.");
                             tx.send(Reset).unwrap();
                         },
-                        _               => if !paused {
+                        _ => if !paused {
                             match key_binds.get(&keycode) {
                                 Some(index) => {
                                     if *index != last_key_pressed {
@@ -147,6 +148,7 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
                                 },
                                 _           => {},
                             }
+                            last_key_pressed = 0xFF_usize;
                         },
                     },
                     Event::KeyUp {keycode, ..}   => {

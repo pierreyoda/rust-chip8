@@ -158,23 +158,6 @@ impl<'a> Chip8Emulator<'a> {
     }
 }
 
-/// Stop the virtual machine and wait for it to properly terminate,
-/// otherwise some messages could still be sent to the backend which
-/// would cause a panic! in the VM's thread since there wouldn't be a
-/// connection.
-/// Must be called by any backend before exit.
-pub fn terminate_vm(tx: Sender<Chip8VMCommand>, rx: Receiver<Chip8UICommand>) {
-    info!("terminating the virtual machine thread...");
-    tx.send(Chip8VMCommand::Quit);
-    loop {
-        match rx.recv().unwrap() {
-            Chip8UICommand::Finished => break,
-            _                        => {},
-        }
-    }
-    info!("virtual machine thread terminated.");
-}
-
 /// Emulation loop simulating the CHIP 8 virtual machine and communicating back
 /// to the emulator's backend implementation by feeding Chip8UI
 pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
@@ -197,6 +180,9 @@ pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
     let mut running         = true;
     let mut beeping         = false;
     let mut waiting_for_key = false;
+    // avoid triggering multiple 'wait for key' instructions at once
+    // especially with a high CPU clock
+    let mut wait_for_key_last_pressed = 0xFF;
 
     'vm: loop {
         // Command from the UI
@@ -204,10 +190,22 @@ pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
             Ok(vm_command) => match vm_command {
                 UpdateRunStatus(run)          => running = run,
                 UpdateKeyStatus(index, state) => {
-                    if waiting_for_key {
-                        vm.end_wait_for_key(index);
-                    } else {
-                        vm.keypad.set_key_state(index, state);
+                    match state {
+                        Keystate::Pressed  => {
+                            if waiting_for_key &&
+                                (index != wait_for_key_last_pressed) {
+                                vm.end_wait_for_key(index);
+                                wait_for_key_last_pressed = index;
+                            } else {
+                                vm.keypad.set_key_state(index, state);
+                            }
+                        },
+                        Keystate::Released => {
+                            wait_for_key_last_pressed = 0xFF;
+                            if !waiting_for_key {
+                                vm.keypad.set_key_state(index, state);
+                            }
+                        },
                     }
                 },
                 Reset                         => vm.reset(),
@@ -231,8 +229,8 @@ pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
                     let display = vm.display.clone();
                     tx.send(UpdateDisplay(display)).unwrap();
                 }
-                waiting_for_key = vm.is_waiting_for_key();
             }
+            waiting_for_key = vm.is_waiting_for_key();
         }
 
         // Timers

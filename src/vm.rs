@@ -457,6 +457,16 @@ impl Chip8 {
     /// decoupling from the framerate.
     fn ld_vx_key(&mut self, x: u8) {
         self.wait_for_key = (true, x);
+        /*for i in 0..16 {
+            match self.keypad.get_key_state(i) {
+                Keystate::Pressed => {
+                    self.v[x as usize] = i as u8;
+                    self.pc += 2;
+                    break;
+                }
+                Keystate::Released => {},
+            }
+        }*/
     }
 
     /// Set I to the memory address of the sprite data corresponding to the
