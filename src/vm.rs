@@ -33,11 +33,11 @@ pub struct Chip8 {
     pub memory          : [u8; 4096], // TEMPORARY pub for debug purposes
     /// The chip's 16 registers, from V0 to VF.
     /// VF is used for the 'carry flag'.
-    pub v               : [u8; 16],
+    v               : [u8; 16],
     /// Index register.
-    pub i               : usize,
+    i               : usize,
     /// Program counter.
-    pub pc              : usize,
+    pc              : usize,
     /// The stack, used for subroutine operations.
     /// By default has 16 levels of nesting.
     pub stack           : [u16; STACK_SIZE],
@@ -138,6 +138,21 @@ impl Chip8 {
         self.v[self.wait_for_key.1 as usize] = key_index as u8;
         self.wait_for_key.0 = false;
         self.pc += 2;
+    }
+
+    /// Get the value stored in the register VX.
+    pub fn register(&self, x: usize) -> u8 {
+        self.v[x]
+    }
+
+    /// Get the index register.
+    pub fn index(&self) -> usize {
+        self.i
+    }
+
+    /// Get the program counter value.
+    pub fn pc(&self) -> usize {
+        self.pc
     }
 
     /// Load a Chip8 rom from the given filepath.
@@ -494,7 +509,7 @@ impl Chip8 {
     /// the address I, and set I to I + X + 1 after operation.
     fn ld_mem_i_regs(&mut self, x: u8) {
         let x_usize = x as usize;
-        for j in 0..x_usize {
+        for j in 0..(x_usize + 1) {
             self.memory[self.i + j] = self.v[j];
         }
         self.i += x_usize + 1;
@@ -505,7 +520,7 @@ impl Chip8 {
     /// starting at the address I.
     fn ld_regs_mem_i(&mut self, x: u8) {
         let x_usize = x as usize;
-        for j in 0..x_usize {
+        for j in 0..(x_usize + 1) {
             self.v[j] = self.memory[self.i + j];
         }
         self.i += x_usize + 1;
