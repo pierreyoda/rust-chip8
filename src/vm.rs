@@ -11,15 +11,15 @@ use keypad::{Keypad, Keystate};
 
 
 /// The default CPU clock, in Hz.
-pub const CPU_CLOCK    : u32 = 600;
+pub const CPU_CLOCK       : u32   = 600;
 /// The timers clock, in Hz.
-pub const TIMERS_CLOCK : u32 = 60;
+pub const TIMERS_CLOCK    : u32   = 60;
 
 /// The index of the register used for the 'carry flag'.
 /// VF is used according to the CHIP 8 specifications.
-pub const FLAG             : usize = 15;
+pub const FLAG            : usize = 15;
 /// The size of the stack.
-const STACK_SIZE       : usize = 16;
+const STACK_SIZE          : usize = 16;
 
 /// CHIP 8 virtual machine.
 /// The references used to implement this particular interpreter include :
@@ -28,32 +28,38 @@ const STACK_SIZE       : usize = 16;
 /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 pub struct Chip8 {
     /// The current opcode.
-    opcode           : u16,
+    opcode              : u16,
     /// The chip's 4096 bytes of memory.
-    pub memory       : [u8; 4096], // TEMPORARY pub for debug purposes
+    pub memory          : [u8; 4096], // TEMPORARY pub for debug purposes
     /// The chip's 16 registers, from V0 to VF.
     /// VF is used for the 'carry flag'.
-    pub v            : [u8; 16],
+    pub v               : [u8; 16],
     /// Index register.
-    pub i            : usize,
+    pub i               : usize,
     /// Program counter.
-    pub pc           : usize,
+    pub pc              : usize,
     /// The stack, used for subroutine operations.
     /// By default has 16 levels of nesting.
-    pub stack        : [u16; STACK_SIZE],
+    pub stack           : [u16; STACK_SIZE],
     /// Stack pointer.
-    pub sp           : usize,
+    pub sp              : usize,
     // Timer registers, must be updated at 60 Hz by the emulator.
-    pub delay_timer  : u8,
-    pub sound_timer  : u8,
+    pub delay_timer     : u8,
+    pub sound_timer     : u8,
     /// Screen component.
-    pub display      : Display,
+    pub display         : Display,
     /// Input component.
-    pub keypad       : Keypad,
+    pub keypad          : Keypad,
     /// Is the virtual machine waiting for a keypress ?
     /// If so, when any key is pressed store its index in VX where X is
     /// the value stored in this tuple.
-    pub wait_for_key : (bool, u8),
+    pub wait_for_key    : (bool, u8),
+    /// Implementation option.
+    /// Should the shifting opcodes 8XY6 and 8XYE use the original implementation,
+    /// i.e. set VX to VY shifted respectively right and left by one bit ?
+    /// If false, the VM will instead consider as many ROMs seem to do that Y=X.
+    /// See http://mattmik.com/chip8.html for more detail.
+    shift_op_use_vy : bool,
 }
 
 /// Macro for handling invalid/unimplemented opcodes.
@@ -71,18 +77,19 @@ impl Chip8 {
     /// Create and return a new, initialized Chip8 virtual machine.
     pub fn new() -> Chip8 {
         let mut chip8 = Chip8 {
-            opcode       : 0u16,
-            memory       : [0u8; 4096],
-            v            : [0u8; 16],
-            i            : 0usize,
-            pc           : 0usize,
-            stack        : [0u16; STACK_SIZE],
-            sp           : 0usize,
-            delay_timer  : 0u8,
-            sound_timer  : 0u8,
-            display      : Display::new(),
-            keypad       : Keypad::new(),
-            wait_for_key : (false, 0x0),
+            opcode          : 0u16,
+            memory          : [0u8; 4096],
+            v               : [0u8; 16],
+            i               : 0usize,
+            pc              : 0usize,
+            stack           : [0u16; STACK_SIZE],
+            sp              : 0usize,
+            delay_timer     : 0u8,
+            sound_timer     : 0u8,
+            display         : Display::new(),
+            keypad          : Keypad::new(),
+            wait_for_key    : (false, 0x0),
+            shift_op_use_vy : false,
         };
         // load the font set in memory in the space [0x0, 0x200[ = [0, 80[
         for i in 0..80 {
@@ -108,6 +115,11 @@ impl Chip8 {
         self.display      = Display::new();
         self.keypad       = Keypad::new();
         self.wait_for_key = (false, 0x0);
+    }
+
+    /// Set the shift_op_use_vy flag.
+    pub fn should_shift_op_use_vy(&mut self, b: bool) {
+        self.shift_op_use_vy = b;
     }
 
     /// Is the CPU waiting for a key press ?
@@ -376,19 +388,24 @@ impl Chip8 {
     }
 
     /// Store the value of the register VY shifted right one bit in register VX
-    /// and set register VF to the most significant bit prior to the shift.
+    /// and set register VF to the least significant bit prior to the shift.
     /// NB : references disagree on this opcode, we use the one defined here :
     /// http://mattmik.com/chip8.html
+    /// If shift_op_use_vy is false, will consider VX instead of VY.
     fn shr_vx_vy(&mut self, x: u8, y: u8) {
-        self.v[FLAG] = self.v[x as usize] & 0x01;
-        self.v[x as usize] = self.v[y as usize] >> 1;
+        let shift_on = if self.shift_op_use_vy { y } else { x };
+        self.v[FLAG] = self.v[shift_on as usize] & 0x01;
+        self.v[x as usize] = self.v[shift_on as usize] >> 1;
         self.pc += 2;
     }
 
     /// Same as 'shr_vx_vy' but with a left shift.
+    /// Set register VF to the most significant bit prior to the shift.
+    /// If shift_op_use_vy is false, will consider VX instead of VY.
     fn shl_vx_vy(&mut self, x: u8, y: u8) {
-        self.v[FLAG] = self.v[x as usize] & 0x01;
-        self.v[x as usize] = self.v[y as usize] << 1;
+        let shift_on = if self.shift_op_use_vy { y } else { x };
+        self.v[FLAG] = self.v[shift_on as usize] & 0x80;
+        self.v[x as usize] = self.v[shift_on as usize] << 1;
         self.pc += 2;
     }
 

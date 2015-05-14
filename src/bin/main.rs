@@ -88,8 +88,8 @@ fn main() {
         .w_title("rust-chip8 emulator")
         .w_width(800)
         .w_height(600);
-    let mut emulator = Chip8Emulator::new(config,
-        Box::new(Chip8BackendSDL2) as Box<Chip8EmulatorBackend>);
+    let backend = Box::new(Chip8BackendSDL2) as Box<Chip8EmulatorBackend>;
+    let mut emulator = Chip8Emulator::new(config, backend);
 
     // Load the ROM and start the emulation
     let rom_filepath = Path::new(&rom_file);

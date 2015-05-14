@@ -95,3 +95,46 @@ fn xor() {
     assert_eq!(vm.pc, 0x789+2*3);
     assert_eq!(vm.v[1], 0x3F);
 }
+
+#[test]
+fn sub() {
+    let mut vm = Chip8::new();
+    vm.execute_opcode(0x1444);
+    vm.execute_opcode(0x6009);
+    vm.execute_opcode(0x610F);
+    vm.execute_opcode(0x8015); // sub_vx_vy
+    assert_eq!(vm.v[FLAG], 0x1);
+    assert_eq!(vm.v[0], 0xFA);
+    vm.execute_opcode(0x6009);
+    vm.execute_opcode(0x8017); // subn_vx_vy
+    assert_eq!(vm.v[FLAG], 0x0);
+    assert_eq!(vm.v[0], 0x6);
+    assert_eq!(vm.pc, 0x444+2*5);
+}
+
+#[test]
+fn shift() {
+    let mut vm = Chip8::new();
+    vm.execute_opcode(0x1900);
+    vm.execute_opcode(0x6006);
+    vm.execute_opcode(0x610F);
+
+    vm.should_shift_op_use_vy(false); // do not shift on VY
+    vm.execute_opcode(0x8016); // shr_vy_vy
+    assert_eq!(vm.v[0], 0x06 >> 1);
+    assert_eq!(vm.v[FLAG], 0x06 & 0x01); // LSB
+    vm.execute_opcode(0x8016);
+    vm.execute_opcode(0x801E); // shl_vx_vy
+    assert_eq!(vm.v[0], (0x06 >> 2) << 1);
+    assert_eq!(vm.v[FLAG], (0x06 >> 2) & 0x80); // MSB
+
+    vm.execute_opcode(0x6006);
+    vm.should_shift_op_use_vy(true); // shift on VY
+    vm.execute_opcode(0x8016);
+    assert_eq!(vm.v[0], 0x0F >> 1);
+    assert_eq!(vm.v[FLAG], 0x0F & 0x01);
+    vm.execute_opcode(0x8116);
+    vm.execute_opcode(0x801E);
+    assert_eq!(vm.v[0], (0x0F >> 1) << 1);
+    assert_eq!(vm.v[FLAG], (0x0F >> 1) & 0x80);
+}
