@@ -128,7 +128,7 @@ impl<'a> Chip8Emulator<'a> {
     /// Run the emulator application after loading the given ROM.
     /// Return true if all went well, false otherwise.
     /// TODO : more flexible run function (maybe a LoadRomCommand ?)
-    pub fn run_rom(&'a mut self, rom_filepath: &Path) -> bool {
+    pub fn run_rom(&mut self, rom_filepath: &Path) -> bool {
         // VM creation and ROM loading
         let mut vm = Chip8::new();
         info!("loading the ROM file \"{}\"...", rom_filepath.display());
