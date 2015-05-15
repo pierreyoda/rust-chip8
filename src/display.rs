@@ -2,9 +2,9 @@
 /// machine.
 
 /// The CHIP 8 display width, in pixels.
-pub const DISPLAY_WIDTH  : u16 = 64;
+pub const DISPLAY_WIDTH  : usize = 64;
 /// The CHIP 8 display height, in pixels.
-pub const DISPLAY_HEIGHT : u16 = 32;
+pub const DISPLAY_HEIGHT : usize = 32;
 
 
 /// The graphics component of a Chip 8 virtual machine.
@@ -22,7 +22,7 @@ pub struct Display {
     /// For a single pixel, '1' means white and '0' black.
     /// Using bytes instead of booleans will make drawing instructions easier
     /// to implement for the same memory cost.
-    pub gfx: [[u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize],
+    pub gfx: [[u8; DISPLAY_WIDTH]; DISPLAY_HEIGHT],
     /// Has the display been modified since the last time it was drawn ?
     /// Should be set to false by the emulator application after every draw.
     pub dirty: bool,
@@ -32,14 +32,14 @@ impl Display {
     /// Create and return a new Display instance.
     pub fn new() -> Display {
         Display {
-            gfx: [[0u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize],
+            gfx: [[0u8; DISPLAY_WIDTH]; DISPLAY_HEIGHT],
             dirty: true,
         }
     }
 
     /// Clear the screen (set it to uniform black).
     pub fn clear(&mut self) {
-        self.gfx = [[0u8; DISPLAY_WIDTH as usize]; DISPLAY_HEIGHT as usize];
+        self.gfx = [[0u8; DISPLAY_WIDTH]; DISPLAY_HEIGHT];
         self.dirty = true;
     }
 
@@ -48,15 +48,14 @@ impl Display {
     /// Return true if there was a collision (i.e. if any of the written pixels
     /// changed from 1 to 0).
     pub fn draw(&mut self, xpos: usize, ypos: usize, sprite: &[u8]) -> bool {
-        self.dirty = true;
         let mut collision = false;
         let h = sprite.len();
 
         for j in 0..h {
             for i in 0..8 {
                 // screen wrap if necessary
-                let y = (ypos + j) % (DISPLAY_HEIGHT as usize);
-                let x = (xpos + i) % (DISPLAY_WIDTH as usize);
+                let y = (ypos + j) % DISPLAY_HEIGHT;
+                let x = (xpos + i) % DISPLAY_WIDTH;
 
                 // draw each sprite pixel with a XOR operation
                 // i.e. toggle the pixel
@@ -67,6 +66,7 @@ impl Display {
                 }
             }
         }
+        self.dirty = true;
 
         collision
     }

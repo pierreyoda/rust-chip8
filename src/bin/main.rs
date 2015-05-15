@@ -18,6 +18,11 @@ mod logger;
 use chip8app::{Chip8Emulator, Chip8EmulatorBackend, Chip8Config};
 use chip8app_sdl2::Chip8BackendSDL2;
 
+/// CPU clock hard limit.
+/// Above 5000Hz or so, without emulation throttling (thread::sleep_ms)
+/// the program starts eating an increasingly huge amount of RAM ??...
+pub const CPU_CLOCK_MAX : u32   = 3000;
+
 fn print_usage(opts: Options) {
     let brief =
         "rust-chip8 emulator.\n\nUsage:\n   rust-chip8 [OPTIONS] ROM_FILE\n";
@@ -39,10 +44,17 @@ fn config_from_matches(matches: &Matches) -> Chip8Config {
         },
         _ => input::KeyboardBinding::QWERTY,
     };
+    config = config.key_binds(keyboard_config);
 
     match matches.opt_str("c") {
         Some(ref string) => match string.parse::<u32>() {
-            Ok(cpu_clock) => { config = config.vm_cpu_clock(cpu_clock); }
+            Ok(cpu_clock) => {
+                if cpu_clock > CPU_CLOCK_MAX {
+                    warn!("CPU clock too high, reverting to the default.");
+                } else {
+                    config = config.vm_cpu_clock(cpu_clock);
+                }
+            }
             Err(_)        => warn!("\"{}\" is not a valid CPU clock number",
                                      string),
         },

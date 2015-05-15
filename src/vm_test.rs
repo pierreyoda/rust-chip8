@@ -1,4 +1,5 @@
 use super::vm::{Chip8, FLAG};
+use super::keypad::Keystate::*;
 
 #[test]
 fn jump_addr() {
@@ -108,10 +109,15 @@ fn add() {
     vm.execute_opcode(0x8ED4); // add_vx_vy
     assert_eq!(vm.register(FLAG), 0x1);
     assert_eq!(vm.register(14), (0xAF+0xFF) as u8);
+    vm.execute_opcode(0x6013);
+    vm.execute_opcode(0x6114);
+    vm.execute_opcode(0x8014);
+    assert_eq!(vm.register(FLAG), 0x0);
+    assert_eq!(vm.register(0), 0x13+0x14);
     vm.execute_opcode(0xA999); // I = 0x999
     vm.execute_opcode(0xFD1E); // add_i_vx
     assert_eq!(vm.index(), 0xFF+0x999);
-    assert_eq!(vm.pc(), 0xFAF+2*7);
+    assert_eq!(vm.pc(), 0xFAF+2*10);
 }
 
 #[test]
@@ -188,4 +194,74 @@ fn shift() {
     vm.execute_opcode(0x801E);
     assert_eq!(vm.register(0), (0x0F >> 1) << 1);
     assert_eq!(vm.register(FLAG), (0x0F >> 1) & 0x80);
+}
+
+#[test]
+fn bcd() {
+    let mut vm = Chip8::new();
+    vm.execute_opcode(0x1515);
+    vm.execute_opcode(0x6095); // 149
+    vm.execute_opcode(0xA400);
+    vm.execute_opcode(0xF033); // ld_mem_i_bcd_vx
+    assert_eq!(vm.memory[0x400+0], 0b0001);
+    assert_eq!(vm.memory[0x400+1], 0b0100);
+    assert_eq!(vm.memory[0x400+2], 0b1001);
+    assert_eq!(vm.pc(), 0x515+2*3);
+}
+
+#[test]
+fn input() {
+    let mut vm = Chip8::new();
+    vm.execute_opcode(0x1999);
+    vm.execute_opcode(0x6D0F);
+    vm.execute_opcode(0x610E);
+    vm.keypad.set_key_state(0xF, Pressed);
+    vm.keypad.set_key_state(0xE, Released);
+    vm.execute_opcode(0xED9E); // skp_vx
+    assert_eq!(vm.pc(), 0x999+4+4);
+    vm.execute_opcode(0xE1A1); // sknp_vx
+    vm.execute_opcode(0xE19E);
+    assert_eq!(vm.pc(), 0x999+4+4+6);
+}
+
+macro_rules! slice_eq {
+    () => ()
+}
+
+#[test]
+fn drawing() {
+    let mut vm = Chip8::new();
+    vm.execute_opcode(0x1200);
+    vm.execute_opcode(0xA250);
+    vm.memory[0x250+0] = 0b1110_0111;
+    vm.memory[0x250+1] = 0b0110_0110;
+    vm.memory[0x250+2] = 0b0011_1100;
+
+    vm.execute_opcode(0x6A19); // x = 25
+    vm.execute_opcode(0x6B07); // y =  7
+    vm.execute_opcode(0xDAB3);
+    assert_eq!(vm.display.dirty, true);
+    assert_eq!(vm.register(FLAG), 0x0);
+    let a0 = [1,1,1,0,0,1,1,1];
+    let a1 = [0,1,1,0,0,1,1,0];
+    let a2 = [0,0,1,1,1,1,0,0];
+    for i in 0..8 {
+        assert_eq!(vm.display.gfx[7+0][25+i], a0[i]);
+        assert_eq!(vm.display.gfx[7+1][25+i], a1[i]);
+        assert_eq!(vm.display.gfx[7+2][25+i], a2[i]);
+    }
+
+    vm.display.dirty = false;
+    vm.execute_opcode(0xA251);
+    vm.execute_opcode(0xDAB1);
+    assert_eq!(vm.display.dirty, true);
+    assert_eq!(vm.register(FLAG), 0x1);
+    let a0_bis = [1,0,0,0,0,0,0,1];
+    for i in 0..8 {
+        assert_eq!(vm.display.gfx[7+0][25+i], a0_bis[i]);
+        assert_eq!(vm.display.gfx[7+1][25+i], a1[i]);
+        assert_eq!(vm.display.gfx[7+2][25+i], a2[i]);
+    }
+
+    assert_eq!(vm.pc(), 0x200+2*6);
 }

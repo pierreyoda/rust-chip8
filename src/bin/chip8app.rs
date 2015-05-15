@@ -252,16 +252,18 @@ pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
         }
 
         // avoid overloading the CPU
-        //thread::sleep_ms(1);
+        // this will prevent reaching very high CPU clock these are
+        // bug-prone and unpractible really
+        thread::sleep_ms(1);
     }
 }
 
 /// Return the best (pixel_scale, width, height) combination with the given
 pub fn get_display_size(w_width: u16, w_height: u16) -> (u16, u16, u16) {
-    let scale_w = w_width / DISPLAY_WIDTH;
-    let scale_h = w_height / DISPLAY_HEIGHT;
+    let scale_w = w_width / (DISPLAY_WIDTH as u16);
+    let scale_h = w_height / (DISPLAY_HEIGHT as u16);
     let scale = cmp::min(scale_w, scale_h);
 
     // adjust to the smallest scale and recompute the window dimensions
-    (scale, scale * DISPLAY_WIDTH, scale * DISPLAY_HEIGHT)
+    (scale, scale * (DISPLAY_WIDTH as u16), scale * (DISPLAY_HEIGHT as u16))
 }
