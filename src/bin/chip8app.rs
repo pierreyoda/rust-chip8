@@ -137,7 +137,7 @@ impl<'a> Chip8Emulator<'a> {
             info!("successfully loaded the ROM file.");
         } else {
             error!("loading error : {}", oerror.unwrap());
-            return true;
+            return false;
         }
 
         // Communication channels
