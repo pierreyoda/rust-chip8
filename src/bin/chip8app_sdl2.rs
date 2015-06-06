@@ -2,8 +2,7 @@ use std::path::Path;
 use std::sync::mpsc::{Sender, Receiver};
 
 extern crate sdl2;
-use self::sdl2::video::{Window, OPENGL, WindowPos};
-use self::sdl2::render::{RenderDriverIndex, ACCELERATED, Renderer, RenderDrawer};
+use self::sdl2::render::RenderDrawer;
 use self::sdl2::event::Event;
 use self::sdl2::rect::Rect;
 use self::sdl2::pixels::Color;
@@ -65,23 +64,14 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
 
         // window creation and rendering setup
         info!("creating the application window...");
-        let sdl_context = sdl2::init(sdl2::INIT_VIDEO).unwrap();
-        let window = match Window::new(&sdl_context,
-                                      config.window_title,
-                                      WindowPos::PosCentered,
-                                      WindowPos::PosCentered,
-                                      width as i32,
-                                      height as i32,
-                                      OPENGL) {
-            Ok(window) => window,
-            Err(err) => panic!("failed to create window: {}", err)
-        };
-        let mut renderer = match Renderer::from_window(window,
-                                                       RenderDriverIndex::Auto,
-                                                       ACCELERATED) {
-            Ok(renderer) => renderer,
-            Err(err) => panic!("failed to create renderer: {}", err)
-        };
+        let mut sdl_context = sdl2::init().video().unwrap();
+        let window = sdl_context.window(config.window_title,
+                                        width as u32, height as u32)
+            .position_centered()
+            .opengl()
+            .build()
+            .unwrap();
+        let mut renderer = window.renderer().build().unwrap();
         let mut drawer      = renderer.drawer();
         let pixel_size      = scale as i32;
         let display_width   = DISPLAY_WIDTH as i32;
