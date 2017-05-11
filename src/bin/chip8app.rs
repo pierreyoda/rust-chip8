@@ -254,6 +254,7 @@ pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
         // avoid overloading the CPU
         // this will prevent reaching very high CPU clock these are
         // bug-prone and unpractible really
+        thread::sleep(::std::time::Duration::from_millis(1));
     }
 }
 
