@@ -1,7 +1,6 @@
 use std::cmp;
 use std::path::Path;
 use std::sync::mpsc::{channel, Sender, Receiver};
-use std::sync::Arc;
 use std::thread;
 
 use super::time::{Duration, SteadyTime};
@@ -228,6 +227,7 @@ pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
                 if vm.display.dirty {
                     let display = vm.display.clone();
                     tx.send(UpdateDisplay(display)).unwrap();
+                    vm.display.dirty = false;
                 }
             }
             waiting_for_key = vm.is_waiting_for_key();
@@ -254,7 +254,6 @@ pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
         // avoid overloading the CPU
         // this will prevent reaching very high CPU clock these are
         // bug-prone and unpractible really
-        thread::sleep_ms(1);
     }
 }
 
