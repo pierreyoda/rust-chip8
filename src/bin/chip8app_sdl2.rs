@@ -48,22 +48,21 @@ impl Chip8BackendSDL2 {
                                                   display_width * scale,
                                                   display_height * scale)
             .unwrap();
-        {
-            let mut target = c.with_target(&mut texture)
-                .expect("This platform does not support render targets !");
-            target.set_draw_color(COLOR_PIXEL_OFF);
-            target.clear();
-            target.set_draw_color(COLOR_PIXEL_ON);
+        c.with_texture_canvas(&mut texture, |texture_canvas| {
+            texture_canvas.set_draw_color(COLOR_PIXEL_OFF);
+            texture_canvas.clear();
+            texture_canvas.set_draw_color(COLOR_PIXEL_ON);
             for y in 0i32..(display_height as i32) {
                 for x in 0i32..(display_width as i32) {
                     // TODO : precompute the used Rect ?
                     // since they only change at window resize...
                     if display.gfx[y as usize][x as usize] == 1u8 {
-                        let _ = target.fill_rect(Rect::new(x * pixel_size, y * pixel_size, scale, scale));
+                        let _ = texture_canvas.fill_rect(
+                            Rect::new(x * pixel_size, y * pixel_size, scale, scale));
                     }
                 }
             }
-        }
+        });
         texture
     }
 }
@@ -105,8 +104,7 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
         let mut event_pump = sdl_context.event_pump().unwrap();
         let key_binds = input::get_sdl_key_bindings(&config.keypad_binding);
         // avoid spamming the channel with redundant 'pressed' events
-        // does not work with multiple keys pressed at the exact same time
-        let mut last_key_pressed = 0xFF_usize; // invalid value by default
+        let mut keys_pressed = Vec::new();
 
         // Framerate handling
         // inspired from the excellent article :
@@ -134,6 +132,9 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
                         tx.send(Quit).unwrap();
                     }
                     Event::KeyDown { keycode, .. } => {
+                        if keys_pressed.contains(&keycode) {
+                            continue;
+                        }
                         match keycode.unwrap() {
                             // quit on Escape
                             Keycode::Escape => {
@@ -151,27 +152,24 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
                                 tx.send(Reset).unwrap();
                             }
                             _ => {
-                                if !paused {
-                                    match key_binds.get(&keycode.unwrap()) {
-                                        Some(index) => {
-                                            if *index != last_key_pressed {
-                                                tx.send(UpdateKeyStatus(*index, Pressed)).unwrap();
-                                                last_key_pressed = *index;
-                                            }
-                                        }
-                                        _ => {}
+                                if !paused { 
+                                    if let Some(index) = key_binds.get(&keycode.unwrap()) {
+                                        tx.send(UpdateKeyStatus(*index, Pressed)).unwrap();
                                     }
-                                    //last_key_pressed = 0xFF_usize;
                                 }
-                            }
+                            },
                         }
+                        keys_pressed.push(keycode);
                     }
                     Event::KeyUp { keycode, .. } => {
-                        match key_binds.get(&keycode.unwrap()) {
-                            Some(index) => {
-                                tx.send(UpdateKeyStatus(*index, Released)).unwrap();
+                        for i in 0..keys_pressed.len() {
+                            if keys_pressed[i] == keycode {
+                                keys_pressed.remove(i);
+                                break;
                             }
-                            _ => {}
+                        }
+                        if let Some(index) = key_binds.get(&keycode.unwrap()) {
+                            tx.send(UpdateKeyStatus(*index, Released)).unwrap();
                         }
                     }
                     _ => continue,
