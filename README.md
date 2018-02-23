@@ -25,6 +25,6 @@ Maze
 
 ## Resources
 
-The [chip8.com][chip8-roms] website offers a comprehensive collection of game and demo ROMs.
+The [Zophar] website offers a comprehensive collection of game and demo ROMs.
 
-[chip8-roms]: http://www.chip8.com/?page=109
+[Zophar]: https://www.zophar.net/pdroms/chip8.html
