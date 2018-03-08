@@ -74,7 +74,7 @@ impl Display {
 
 /// Chip8 font set.
 /// Each number or character is 4x5 pixels and is stored as 5 bytes.
-/// In each byte, only the first nibble (the first 4 bites) is used.
+/// In each byte, only the first nibble (the first 4 bytes) is used.
 /// For instance, with the number 3 :
 ///  hex    bin     ==> drawn pixels
 /// 0xF0  1111 0000        ****
