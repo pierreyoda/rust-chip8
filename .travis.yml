@@ -6,6 +6,4 @@ rust:
   - nightly
 
 before_install:
-  - sudo add-apt-repository ppa:team-xbmc/ppa -y
-  - sudo apt-get update -q
   - sudo apt-get install libsdl2-dev
