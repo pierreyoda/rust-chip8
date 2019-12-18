@@ -3,13 +3,13 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
-use super::time::{Duration, SteadyTime};
+use time::{Duration, SteadyTime};
 
 extern crate chip8vm;
-use self::chip8vm::display::{Display, DISPLAY_HEIGHT, DISPLAY_WIDTH};
-use self::chip8vm::keypad::Keystate;
-use self::chip8vm::vm::{Chip8, CPU_CLOCK, TIMERS_CLOCK};
-use super::input;
+use crate::input;
+use chip8vm::display::{Display, DISPLAY_HEIGHT, DISPLAY_WIDTH};
+use chip8vm::keypad::Keystate;
+use chip8vm::vm::{Chip8, CPU_CLOCK, TIMERS_CLOCK};
 
 /// Structure facilitating the configuration of a 'Chip8Application'.
 /// The configuration functions (e.g. 'w_title') work with moved 'self' values

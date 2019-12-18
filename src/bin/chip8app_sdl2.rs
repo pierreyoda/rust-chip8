@@ -11,12 +11,11 @@ use self::sdl2::video::WindowContext;
 extern crate chip8vm;
 use self::chip8vm::display::{Display, DISPLAY_HEIGHT, DISPLAY_WIDTH};
 use self::chip8vm::keypad::Keystate::{Pressed, Released};
-use super::chip8app::Chip8UICommand::*;
-use super::chip8app::Chip8VMCommand::*;
-use super::chip8app::{
+use crate::chip8app::Chip8UICommand::*;
+use crate::chip8app::Chip8VMCommand::*;
+use crate::chip8app::{
     get_display_size, Chip8Config, Chip8EmulatorBackend, Chip8UICommand, Chip8VMCommand,
 };
-use super::input;
 
 // todo : make this a backend-agnostic option
 const COLOR_PIXEL_OFF: Color = Color {
@@ -113,7 +112,7 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
         canvas.present();
 
         let mut event_pump = sdl_context.event_pump().unwrap();
-        let key_binds = input::get_sdl_key_bindings(&config.keypad_binding);
+        let key_binds = crate::input::get_sdl_key_bindings(&config.keypad_binding);
         // avoid spamming the channel with redundant 'pressed' events
         let mut keys_pressed = Vec::new();
 

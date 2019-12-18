@@ -1,21 +1,25 @@
-extern crate getopts;
-use getopts::{Matches, Options};
-
-// we need a backend-agnostic time handling for the VM
-extern crate time;
+use std::env;
+use std::path::Path;
 
 #[macro_use]
 extern crate log;
+extern crate env_logger;
+
+extern crate getopts;
+extern crate time;
+use getopts::{Matches, Options};
+
+extern crate chip8vm;
 
 mod chip8app;
 mod chip8app_sdl2;
 mod input;
-mod logger;
-use crate::chip8app::Chip8Config;
+use crate::chip8app::{Chip8Config, Chip8Emulator, Chip8EmulatorBackend};
+use crate::chip8app_sdl2::Chip8BackendSDL2;
 
 /// CPU clock hard limit.
 /// Above 5000Hz or so, without emulation throttling (thread::sleep_ms)
-/// the program starts eating an increasingly huge amount of RAM ??...
+/// the program starts eating an increasingly huge amount of RAM...
 pub const CPU_CLOCK_MAX: u32 = 3000;
 
 fn print_usage(opts: Options) {
@@ -59,13 +63,8 @@ fn config_from_matches(matches: &Matches) -> Chip8Config {
     config
 }
 
-#[cfg(not(test))]
 fn main() {
-    // Logger initialization
-    match logger::init_console_logger() {
-        Err(error) => panic!(format!("Logging setup error : {}", error.description())),
-        _ => (),
-    }
+    env_logger::init();
 
     // Program options
     let args: Vec<String> = env::args().collect();

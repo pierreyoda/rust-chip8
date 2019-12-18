@@ -3,16 +3,18 @@ name = "chip8"
 version = "0.1.0"
 authors = ["pierreyoda <pierreyoda@users.noreply.github.com>"]
 
-[[bin]]
-name="rust-chip8"
-
 [lib]
 name = "chip8vm"
 path = "src/lib.rs"
 
+[[bin]]
+name = "chip8ui"
+path = "src/bin/main.rs"
+
 [dependencies]
-time = "0.1.37"
-log = "0.3.7"
+log = "0.4.8"
+env_logger = "0.7.1"
+time = "0.1.42"
 getopts = "0.2.14"
 rand = "0.3.15"
 sdl2 = "0.30.0"
