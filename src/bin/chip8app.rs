@@ -114,12 +114,15 @@ pub struct Chip8Emulator<'a> {
     config: Chip8Config,
     /// Pointer to the heap-allocated backend responsible for running the
     /// actual UI loop in the main thread.
-    backend: Box<Chip8EmulatorBackend + 'a>,
+    backend: Box<dyn Chip8EmulatorBackend + 'a>,
 }
 
 impl<'a> Chip8Emulator<'a> {
     /// Create and return a new Chip8Emulator, with the given 'Chip8Config'.
-    pub fn new(config: Chip8Config, backend: Box<Chip8EmulatorBackend + 'a>) -> Chip8Emulator<'a> {
+    pub fn new(
+        config: Chip8Config,
+        backend: Box<dyn Chip8EmulatorBackend + 'a>,
+    ) -> Chip8Emulator<'a> {
         Chip8Emulator {
             config: config,
             backend: backend,

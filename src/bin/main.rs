@@ -1,7 +1,3 @@
-use std::env;
-use std::error::Error;
-use std::path::Path;
-
 extern crate getopts;
 use getopts::{Matches, Options};
 
@@ -15,8 +11,7 @@ mod chip8app;
 mod chip8app_sdl2;
 mod input;
 mod logger;
-use chip8app::{Chip8Config, Chip8Emulator, Chip8EmulatorBackend};
-use chip8app_sdl2::Chip8BackendSDL2;
+use crate::chip8app::Chip8Config;
 
 /// CPU clock hard limit.
 /// Above 5000Hz or so, without emulation throttling (thread::sleep_ms)
@@ -109,7 +104,7 @@ fn main() {
         .w_title("rust-chip8 emulator")
         .w_width(800)
         .w_height(600);
-    let backend = Box::new(Chip8BackendSDL2) as Box<Chip8EmulatorBackend>;
+    let backend = Box::new(Chip8BackendSDL2) as Box<dyn Chip8EmulatorBackend>;
     let mut emulator = Chip8Emulator::new(config, backend);
 
     // Load the ROM and start the emulation

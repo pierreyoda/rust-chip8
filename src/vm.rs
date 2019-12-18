@@ -5,8 +5,8 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use display::{Display, FONT_SET};
-use keypad::{Keypad, Keystate};
+use crate::display::{Display, FONT_SET};
+use crate::keypad::{Keypad, Keystate};
 
 /// The default CPU clock, in Hz.
 pub const CPU_CLOCK: u32 = 600;
