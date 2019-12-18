@@ -2,10 +2,9 @@
 /// machine.
 
 /// The CHIP 8 display width, in pixels.
-pub const DISPLAY_WIDTH  : usize = 64;
+pub const DISPLAY_WIDTH: usize = 64;
 /// The CHIP 8 display height, in pixels.
-pub const DISPLAY_HEIGHT : usize = 32;
-
+pub const DISPLAY_HEIGHT: usize = 32;
 
 /// The graphics component of a Chip 8 virtual machine.
 /// The Chip 8 uses a 64x32 monochrome display with the format :
@@ -61,7 +60,9 @@ impl Display {
                 // i.e. toggle the pixel
                 // 0x80 = 1000 0000 : allows to check each pixel in the sprite
                 if (sprite[j] & (0x80 >> i)) != 0x00 {
-                    if self.gfx[y][x] == 0x01 { collision = true; }
+                    if self.gfx[y][x] == 0x01 {
+                        collision = true;
+                    }
                     self.gfx[y][x] ^= 0x01;
                 }
             }
@@ -99,5 +100,5 @@ pub static FONT_SET: [u8; 80] = [
     0xF0, 0x80, 0x80, 0x80, 0xF0, // C
     0xE0, 0x90, 0x90, 0x90, 0xE0, // D
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-    0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];

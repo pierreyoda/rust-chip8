@@ -1,25 +1,23 @@
+use rand::random;
 /// Core CPU implementation.
-
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use rand::random;
 
 use display::{Display, FONT_SET};
 use keypad::{Keypad, Keystate};
 
-
 /// The default CPU clock, in Hz.
-pub const CPU_CLOCK       : u32   = 600;
+pub const CPU_CLOCK: u32 = 600;
 /// The timers clock, in Hz.
-pub const TIMERS_CLOCK    : u32   = 60;
+pub const TIMERS_CLOCK: u32 = 60;
 
 /// The index of the register used for the 'carry flag'.
 /// VF is used according to the CHIP 8 specifications.
-pub const FLAG            : usize = 15;
+pub const FLAG: usize = 15;
 /// The size of the stack.
-const STACK_SIZE          : usize = 16;
+const STACK_SIZE: usize = 16;
 
 /// CHIP 8 virtual machine.
 /// The references used to implement this particular interpreter include :
@@ -28,68 +26,68 @@ const STACK_SIZE          : usize = 16;
 /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM
 pub struct Chip8 {
     /// The current opcode.
-    opcode              : u16,
+    opcode: u16,
     /// The chip's 4096 bytes of memory.
-    pub memory          : [u8; 4096], // TEMPORARY pub for debug purposes
+    pub memory: [u8; 4096], // TEMPORARY pub for debug purposes
     /// The chip's 16 registers, from V0 to VF.
     /// VF is used for the 'carry flag'.
-    v               : [u8; 16],
+    v: [u8; 16],
     /// Index register.
-    i               : usize,
+    i: usize,
     /// Program counter.
-    pc              : usize,
+    pc: usize,
     /// The stack, used for subroutine operations.
     /// By default has 16 levels of nesting.
-    pub stack           : [u16; STACK_SIZE],
+    pub stack: [u16; STACK_SIZE],
     /// Stack pointer.
-    pub sp              : usize,
+    pub sp: usize,
     // Timer registers, must be updated at 60 Hz by the emulator.
-    pub delay_timer     : u8,
-    pub sound_timer     : u8,
+    pub delay_timer: u8,
+    pub sound_timer: u8,
     /// Screen component.
-    pub display         : Display,
+    pub display: Display,
     /// Input component.
-    pub keypad          : Keypad,
+    pub keypad: Keypad,
     /// Is the virtual machine waiting for a keypress ?
     /// If so, when any key is pressed store its index in VX where X is
     /// the value stored in this tuple.
-    pub wait_for_key    : (bool, u8),
+    pub wait_for_key: (bool, u8),
     /// Implementation option.
     /// Should the shifting opcodes 8XY6 and 8XYE use the original implementation,
     /// i.e. set VX to VY shifted respectively right and left by one bit ?
     /// If false, the VM will instead consider as many ROMs seem to do that Y=X.
     /// See http://mattmik.com/chip8.html for more detail.
-    shift_op_use_vy : bool,
+    shift_op_use_vy: bool,
 }
 
 /// Macro for handling invalid/unimplemented opcodes.
 /// As of now only prints a error message, could maybe panic in the future.
 macro_rules! op_not_implemented {
-    ($op: expr, $pc: expr) => (
-        println!("Not implemented opcode {:0>4X} at {:0>5X}",
-                 $op as usize,
-                 $pc);
-    )
+    ($op: expr, $pc: expr) => {
+        println!(
+            "Not implemented opcode {:0>4X} at {:0>5X}",
+            $op as usize, $pc
+        );
+    };
 }
-
 
 impl Chip8 {
     /// Create and return a new, initialized Chip8 virtual machine.
     pub fn new() -> Chip8 {
         let mut chip8 = Chip8 {
-            opcode          : 0u16,
-            memory          : [0u8; 4096],
-            v               : [0u8; 16],
-            i               : 0usize,
-            pc              : 0usize,
-            stack           : [0u16; STACK_SIZE],
-            sp              : 0usize,
-            delay_timer     : 0u8,
-            sound_timer     : 0u8,
-            display         : Display::new(),
-            keypad          : Keypad::new(),
-            wait_for_key    : (false, 0x0),
-            shift_op_use_vy : false,
+            opcode: 0u16,
+            memory: [0u8; 4096],
+            v: [0u8; 16],
+            i: 0usize,
+            pc: 0usize,
+            stack: [0u16; STACK_SIZE],
+            sp: 0usize,
+            delay_timer: 0u8,
+            sound_timer: 0u8,
+            display: Display::new(),
+            keypad: Keypad::new(),
+            wait_for_key: (false, 0x0),
+            shift_op_use_vy: false,
         };
         // load the font set in memory in the space [0x0, 0x200[ = [0, 80[
         for i in 0..80 {
@@ -104,16 +102,16 @@ impl Chip8 {
     /// Reinitialize the virtual machine's state but keep the loaded program
     /// in memory.
     pub fn reset(&mut self) {
-        self.opcode       = 0u16;
-        self.v            = [0u8; 16];
-        self.i            = 0usize;
-        self.pc           = 0x200;
-        self.stack        = [0u16; STACK_SIZE];
-        self.sp           = 0usize;
-        self.delay_timer  = 0u8;
-        self.sound_timer  = 0u8;
-        self.display      = Display::new();
-        self.keypad       = Keypad::new();
+        self.opcode = 0u16;
+        self.v = [0u8; 16];
+        self.i = 0usize;
+        self.pc = 0x200;
+        self.stack = [0u16; STACK_SIZE];
+        self.sp = 0usize;
+        self.delay_timer = 0u8;
+        self.sound_timer = 0u8;
+        self.display = Display::new();
+        self.keypad = Keypad::new();
         self.wait_for_key = (false, 0x0);
     }
 
@@ -131,8 +129,10 @@ impl Chip8 {
     /// waiting for a key pressed that a key has been pressed.
     pub fn end_wait_for_key(&mut self, key_index: usize) {
         if !self.is_waiting_for_key() {
-            warn!(concat!("Chip8::end_wait_for_key_press called but the VM ",
-                          "wasn't waiting for a key press - ignoring"));
+            warn!(concat!(
+                "Chip8::end_wait_for_key_press called but the VM ",
+                "wasn't waiting for a key press - ignoring"
+            ));
             return;
         }
         self.v[self.wait_for_key.1 as usize] = key_index as u8;
@@ -161,19 +161,20 @@ impl Chip8 {
         let file = match File::open(filepath) {
             Ok(f) => f,
             Err(ref why) => {
-                return Some(format!("couldn't open rom file \"{}\" : {}",
-                                    filepath.display(),
-                                    Error::description(why)));
-            },
+                return Some(format!(
+                    "couldn't open rom file \"{}\" : {}",
+                    filepath.display(),
+                    Error::description(why)
+                ));
+            }
         };
         for (i, b) in file.bytes().enumerate() {
             //if b.is_none() /* EOF */ { break; }
             match b {
                 Ok(byte) => self.memory[self.pc + i] = byte,
                 Err(e) => {
-                    return Some(format!("error while reading ROM : {}",
-                                        e.to_string()));
-                },
+                    return Some(format!("error while reading ROM : {}", e.to_string()));
+                }
             }
         }
         None
@@ -188,8 +189,7 @@ impl Chip8 {
         }
         // Fetch and execute the opcode to execute ;
         // an opcode being 2 bytes long, we need to read 2 bytes from memory
-        let op = (self.memory[self.pc] as u16) << 8
-                 | (self.memory[self.pc + 1] as u16);
+        let op = (self.memory[self.pc] as u16) << 8 | (self.memory[self.pc + 1] as u16);
 
         // println!("{:0>4X} {:0>4X}", self.opcode, self.pc); // DEBUG
         self.opcode = op;
@@ -203,53 +203,53 @@ impl Chip8 {
         // if the opcode is 0xABCD.
         let opcode_tuple = (
             ((op & 0xF000) >> 12) as u8,
-            ((op & 0x0F00) >> 8)  as u8,
-            ((op & 0x00F0) >> 4)  as u8,
-            (op & 0x000F)         as u8);
+            ((op & 0x0F00) >> 8) as u8,
+            ((op & 0x00F0) >> 4) as u8,
+            (op & 0x000F) as u8,
+        );
 
         //println!("{:0>4X}/{:X},{:X},{:X},{:X}", self.opcode, a, b, c, d);
 
         // Opcode decoding
-        match opcode_tuple
-        {
+        match opcode_tuple {
             (0x0, 0x0, 0xE, 0x0) => self.cls(),
             (0x0, 0x0, 0xE, 0xE) => self.ret(),
             // 0NNN = sys addr : ignore
-            (0x1, _, _, _)       => self.jump_addr(op & 0x0FFF),
-            (0x2, _, _, _)       => self.call_addr(op & 0x0FFF),
-            (0x3, x, _, _)       => self.se_vx_nn(x, (op & 0x00FF) as u8),
-            (0x4, x, _, _)       => self.sne_vx_nn(x, (op & 0x00FF) as u8),
-            (0x5, x, y, 0x0)     => self.se_vx_vy(x, y),
-            (0x6, x, _, _)       => self.ld_vx_nn(x, (op & 0x00FF) as u8),
-            (0x7, x, _, _)       => self.add_vx_nn(x, (op & 0x00FF) as u8),
-            (0x8, x, y, 0x0)     => self.ld_vx_vy(x, y),
-            (0x8, x, y, 0x1)     => self.or_vx_vy(x, y),
-            (0x8, x, y, 0x2)     => self.and_vx_vy(x, y),
-            (0x8, x, y, 0x3)     => self.xor_vx_vy(x, y),
-            (0x8, x, y, 0x4)     => self.add_vx_vy(x, y),
-            (0x8, x, y, 0x5)     => self.sub_vx_vy(x, y),
-            (0x8, x, y, 0x6)     => self.shr_vx_vy(x, y),
-            (0x8, x, y, 0x7)     => self.subn_vx_vy(x, y),
-            (0x8, x, y, 0xE)     => self.shl_vx_vy(x, y),
-            (0x9, x, y, 0x0)     => self.sne_vx_vy(x, y),
-            (0xA, _, _, _)       => self.ld_i_addr(op & 0x0FFF),
-            (0xB, _, _, _)       => {
+            (0x1, _, _, _) => self.jump_addr(op & 0x0FFF),
+            (0x2, _, _, _) => self.call_addr(op & 0x0FFF),
+            (0x3, x, _, _) => self.se_vx_nn(x, (op & 0x00FF) as u8),
+            (0x4, x, _, _) => self.sne_vx_nn(x, (op & 0x00FF) as u8),
+            (0x5, x, y, 0x0) => self.se_vx_vy(x, y),
+            (0x6, x, _, _) => self.ld_vx_nn(x, (op & 0x00FF) as u8),
+            (0x7, x, _, _) => self.add_vx_nn(x, (op & 0x00FF) as u8),
+            (0x8, x, y, 0x0) => self.ld_vx_vy(x, y),
+            (0x8, x, y, 0x1) => self.or_vx_vy(x, y),
+            (0x8, x, y, 0x2) => self.and_vx_vy(x, y),
+            (0x8, x, y, 0x3) => self.xor_vx_vy(x, y),
+            (0x8, x, y, 0x4) => self.add_vx_vy(x, y),
+            (0x8, x, y, 0x5) => self.sub_vx_vy(x, y),
+            (0x8, x, y, 0x6) => self.shr_vx_vy(x, y),
+            (0x8, x, y, 0x7) => self.subn_vx_vy(x, y),
+            (0x8, x, y, 0xE) => self.shl_vx_vy(x, y),
+            (0x9, x, y, 0x0) => self.sne_vx_vy(x, y),
+            (0xA, _, _, _) => self.ld_i_addr(op & 0x0FFF),
+            (0xB, _, _, _) => {
                 let v0 = self.v[0] as u16; // sacrifice to the god of borrows
                 self.jump_addr(op & 0x0FFF + v0);
-            },
-            (0xC, x, _, _)       => self.rnd_vx_nn(x, (op & 0x00FF) as u8),
-            (0xD, x, y, n)       => self.drw_vx_vy_n(x, y, n),
-            (0xE, x, 0x9, 0xE)   => self.skp_vx(x),
-            (0xE, x, 0xA, 0x1)   => self.sknp_vx(x),
-            (0xF, x, 0x0, 0x7)   => self.ld_vx_dt(x),
-            (0xF, x, 0x0, 0xA)   => self.ld_vx_key(x),
-            (0xF, x, 0x1, 0x5)   => self.ld_dt_vx(x),
-            (0xF, x, 0x1, 0x8)   => self.ld_st_vx(x),
-            (0xF, x, 0x1, 0xE)   => self.add_i_vx(x),
-            (0xF, x, 0x2, 0x9)   => self.ld_i_font_vx(x),
-            (0xF, x, 0x3, 0x3)   => self.ld_mem_i_bcd_vx(x),
-            (0xF, x, 0x5, 0x5)   => self.ld_mem_i_regs(x),
-            (0xF, x, 0x6, 0x5)   => self.ld_regs_mem_i(x),
+            }
+            (0xC, x, _, _) => self.rnd_vx_nn(x, (op & 0x00FF) as u8),
+            (0xD, x, y, n) => self.drw_vx_vy_n(x, y, n),
+            (0xE, x, 0x9, 0xE) => self.skp_vx(x),
+            (0xE, x, 0xA, 0x1) => self.sknp_vx(x),
+            (0xF, x, 0x0, 0x7) => self.ld_vx_dt(x),
+            (0xF, x, 0x0, 0xA) => self.ld_vx_key(x),
+            (0xF, x, 0x1, 0x5) => self.ld_dt_vx(x),
+            (0xF, x, 0x1, 0x8) => self.ld_st_vx(x),
+            (0xF, x, 0x1, 0xE) => self.add_i_vx(x),
+            (0xF, x, 0x2, 0x9) => self.ld_i_font_vx(x),
+            (0xF, x, 0x3, 0x3) => self.ld_mem_i_bcd_vx(x),
+            (0xF, x, 0x5, 0x5) => self.ld_mem_i_regs(x),
+            (0xF, x, 0x6, 0x5) => self.ld_regs_mem_i(x),
             _ => op_not_implemented!(op, self.pc),
         }
     }
@@ -298,29 +298,37 @@ impl Chip8 {
     /// Skip the next instruction if the value of register VX is equal to the
     /// value of register VY.
     fn se_vx_vy(&mut self, x: u8, y: u8) {
-        self.pc += if self.v[x as usize] == self.v[y as usize] { 4 } else { 2 };
+        self.pc += if self.v[x as usize] == self.v[y as usize] {
+            4
+        } else {
+            2
+        };
     }
 
     /// Skip the next instruction if the value of register VX is not equal to
     /// the value of register VY.
     fn sne_vx_vy(&mut self, x: u8, y: u8) {
-        self.pc += if self.v[x as usize] != self.v[y as usize] { 4 } else { 2 };
+        self.pc += if self.v[x as usize] != self.v[y as usize] {
+            4
+        } else {
+            2
+        };
     }
 
     /// Skip the next instruction if the key of index VX is currently pressed.
     fn skp_vx(&mut self, x: u8) {
         self.pc += match self.keypad.get_key_state(self.v[x as usize] as usize) {
-                Keystate::Pressed  => 4,
-                Keystate::Released => 2,
-            };
+            Keystate::Pressed => 4,
+            Keystate::Released => 2,
+        };
     }
 
     /// Skip the next instruction if the key of index VX is currently released.
     fn sknp_vx(&mut self, x: u8) {
         self.pc += match self.keypad.get_key_state(self.v[x as usize] as usize) {
-                Keystate::Pressed  => 2,
-                Keystate::Released => 4,
-            };
+            Keystate::Pressed => 2,
+            Keystate::Released => 4,
+        };
     }
 
     /// Store the value 0xNN in the the register VX.
@@ -436,11 +444,14 @@ impl Chip8 {
     /// VF will act here as a collision flag, i.e. if any set pixel is erased
     /// set it to 0x1, and to 0x0 otherwise.
     fn drw_vx_vy_n(&mut self, x: u8, y: u8, n: u8) {
-        let pos_x     = self.v[x as usize] as usize;
-        let pos_y     = self.v[y as usize] as usize;
+        let pos_x = self.v[x as usize] as usize;
+        let pos_y = self.v[y as usize] as usize;
         let mem_start = self.i;
-        let mem_end   = self.i + n as usize;
-        if self.display.draw(pos_x, pos_y, &self.memory[mem_start..mem_end]) {
+        let mem_end = self.i + n as usize;
+        if self
+            .display
+            .draw(pos_x, pos_y, &self.memory[mem_start..mem_end])
+        {
             self.v[FLAG] = 0x1;
         } else {
             self.v[FLAG] = 0x0;
@@ -499,9 +510,9 @@ impl Chip8 {
     fn ld_mem_i_bcd_vx(&mut self, x: u8) {
         // VX is a byte : its decimal value is in 0..256
         let vx = self.v[x as usize];
-        self.memory[self.i]   = vx / 100;
-        self.memory[self.i+1] = (vx / 10)  % 10;
-        self.memory[self.i+2] = (vx % 100) % 10;
+        self.memory[self.i] = vx / 100;
+        self.memory[self.i + 1] = (vx / 10) % 10;
+        self.memory[self.i + 2] = (vx % 100) % 10;
         self.pc += 2;
     }
 

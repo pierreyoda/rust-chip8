@@ -12,8 +12,7 @@ pub enum KeyboardBinding {
 /// Return the HashMap<Keycode, usize> corresponding to the
 /// given keyboard configuration which allows to simulate the virtual keypad.
 /// See 'chip8vm::keypad::Keypad' for the QWERTY binding.
-pub fn get_sdl_key_bindings(keyboard: &KeyboardBinding)
-    -> HashMap<Keycode, usize> {
+pub fn get_sdl_key_bindings(keyboard: &KeyboardBinding) -> HashMap<Keycode, usize> {
     let mut hm = HashMap::new();
 
     // since we only support AZERTY and QWERTY for now, insert the common keys
@@ -36,14 +35,14 @@ pub fn get_sdl_key_bindings(keyboard: &KeyboardBinding)
             hm.insert(Keycode::A, 0x7);
             hm.insert(Keycode::Z, 0xA);
             hm.insert(Keycode::X, 0x0);
-        },
+        }
         KeyboardBinding::AZERTY => {
             hm.insert(Keycode::Q, 0x7);
             hm.insert(Keycode::W, 0xA);
             hm.insert(Keycode::A, 0x4);
             hm.insert(Keycode::Z, 0x5);
             hm.insert(Keycode::X, 0x0);
-        },
+        }
     }
 
     assert_eq!(hm.len(), 16);

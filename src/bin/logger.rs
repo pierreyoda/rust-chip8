@@ -1,7 +1,6 @@
 /// Simple logging facilities using the log crate.
-
 extern crate log;
-use log::{LogRecord, LogLevel, LogMetadata, LogLevelFilter, SetLoggerError};
+use log::{LogLevel, LogLevelFilter, LogMetadata, LogRecord, SetLoggerError};
 
 /// Outputs all log messages to stdout.
 struct ConsoleLogger;

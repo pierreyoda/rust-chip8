@@ -1,4 +1,3 @@
-
 /// Stores the state of the virtual keypad used for input.
 ///
 /// The Chip8 virtual keypad has the following layout :
@@ -34,7 +33,7 @@ impl Keypad {
     /// Create and return a new Keypad instance.
     pub fn new() -> Keypad {
         Keypad {
-            keys: [Keystate::Released; 16]
+            keys: [Keystate::Released; 16],
         }
     }
 

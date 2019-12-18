@@ -1,35 +1,34 @@
 use std::cmp;
 use std::path::Path;
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
 use super::time::{Duration, SteadyTime};
 
 extern crate chip8vm;
+use self::chip8vm::display::{Display, DISPLAY_HEIGHT, DISPLAY_WIDTH};
+use self::chip8vm::keypad::Keystate;
 use self::chip8vm::vm::{Chip8, CPU_CLOCK, TIMERS_CLOCK};
-use self::chip8vm::display::{Display, DISPLAY_WIDTH, DISPLAY_HEIGHT};
-use self::chip8vm::keypad::{Keystate};
 use super::input;
-
 
 /// Structure facilitating the configuration of a 'Chip8Application'.
 /// The configuration functions (e.g. 'w_title') work with moved 'self' values
 /// to allow chaining them inside the Chip8Application::new function call.
 pub struct Chip8Config {
     /// The title of the emulator window.
-    pub window_title   : &'static str,
+    pub window_title: &'static str,
     /// The desired width for the emulator window.
     /// NB : this is just a hint, the application may resize to reach a proper
     /// aspect ratio.
-    pub window_width   : u16,
+    pub window_width: u16,
     /// The desired height for the emulator window.
     /// NB : this is just a hint, the application may resize to reach a proper
     /// aspect ratio.
-    pub window_height  : u16,
+    pub window_height: u16,
     /// The keyboard configuration. QWERTY by default.
-    pub keypad_binding : input::KeyboardBinding,
+    pub keypad_binding: input::KeyboardBinding,
     /// The virtual machine's desired CPU clock in Hz (cycles per second).
-    pub vm_cpu_clock   : u32,
+    pub vm_cpu_clock: u32,
 }
 
 /// Macro to avoid boilerplate setter code.
@@ -46,11 +45,11 @@ impl Chip8Config {
     /// Create and return the default set of options.
     pub fn new() -> Chip8Config {
         Chip8Config {
-            window_title   : "",
-            window_width   : 64,
-            window_height  : 32,
-            keypad_binding : input::KeyboardBinding::QWERTY,
-            vm_cpu_clock   : CPU_CLOCK
+            window_title: "",
+            window_width: 64,
+            window_height: 32,
+            keypad_binding: input::KeyboardBinding::QWERTY,
+            vm_cpu_clock: CPU_CLOCK,
         }
     }
 
@@ -98,8 +97,12 @@ pub enum Chip8UICommand {
 pub trait Chip8EmulatorBackend {
     /// Start the UI loop with the given configuration and the provided
     /// thread channels.
-    fn exec(&mut self, config: &Chip8Config,
-            tx: Sender<Chip8VMCommand>, rx: Receiver<Chip8UICommand>);
+    fn exec(
+        &mut self,
+        config: &Chip8Config,
+        tx: Sender<Chip8VMCommand>,
+        rx: Receiver<Chip8UICommand>,
+    );
 }
 
 /// The backend-agnostic CHIP 8 emulator application.
@@ -108,19 +111,18 @@ pub trait Chip8EmulatorBackend {
 /// 'Chip8VMCommand' and 'Chip8UICommand'.
 pub struct Chip8Emulator<'a> {
     /// The 'Chip8Config' instance holding the application's configuration.
-    config  : Chip8Config,
+    config: Chip8Config,
     /// Pointer to the heap-allocated backend responsible for running the
     /// actual UI loop in the main thread.
-    backend : Box<Chip8EmulatorBackend + 'a>,
+    backend: Box<Chip8EmulatorBackend + 'a>,
 }
 
 impl<'a> Chip8Emulator<'a> {
     /// Create and return a new Chip8Emulator, with the given 'Chip8Config'.
-    pub fn new(config: Chip8Config, backend: Box<Chip8EmulatorBackend + 'a>)
-        -> Chip8Emulator<'a> {
+    pub fn new(config: Chip8Config, backend: Box<Chip8EmulatorBackend + 'a>) -> Chip8Emulator<'a> {
         Chip8Emulator {
-            config  : config,
-            backend : backend,
+            config: config,
+            backend: backend,
         }
     }
 
@@ -159,25 +161,30 @@ impl<'a> Chip8Emulator<'a> {
 
 /// Emulation loop simulating the CHIP 8 virtual machine and communicating back
 /// to the emulator's backend implementation by feeding Chip8UI
-pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
-               tx: Sender<Chip8UICommand>, rx: Receiver<Chip8VMCommand>) {
-    use self::Chip8VMCommand::*;
+pub fn exec_vm(
+    vm: &mut Chip8,
+    cpu_clock: u32,
+    tx: Sender<Chip8UICommand>,
+    rx: Receiver<Chip8VMCommand>,
+) {
     use self::Chip8UICommand::*;
+    use self::Chip8VMCommand::*;
 
-    info!("starting the virtual machine thread with a CPU clock of {} Hz",
-        cpu_clock);
+    info!(
+        "starting the virtual machine thread with a CPU clock of {} Hz",
+        cpu_clock
+    );
 
     // time handling is in nanoseconds
-    let mut t             = SteadyTime::now();
-    let mut last_t_cpu    = SteadyTime::now();
+    let mut t = SteadyTime::now();
+    let mut last_t_cpu = SteadyTime::now();
     let mut last_t_timers = t;
-    let timers_step = Duration::nanoseconds(10i64.pow(9)
-                                            / (TIMERS_CLOCK as i64));
-    let cpu_step    = Duration::nanoseconds(10i64.pow(9) / (cpu_clock as i64));
+    let timers_step = Duration::nanoseconds(10i64.pow(9) / (TIMERS_CLOCK as i64));
+    let cpu_step = Duration::nanoseconds(10i64.pow(9) / (cpu_clock as i64));
 
     // VM state
-    let mut running         = true;
-    let mut beeping         = false;
+    let mut running = true;
+    let mut beeping = false;
     let mut waiting_for_key = false;
     // avoid triggering multiple 'wait for key' instructions at once
     // especially with a high CPU clock
@@ -185,37 +192,35 @@ pub fn exec_vm(vm: &mut Chip8, cpu_clock: u32,
 
     'vm: loop {
         // Command from the UI
-        match rx.try_recv() { // non-blocking receiving function
+        match rx.try_recv() {
+            // non-blocking receiving function
             Ok(vm_command) => match vm_command {
-                UpdateRunStatus(run)          => running = run,
-                UpdateKeyStatus(index, state) => {
-                    match state {
-                        Keystate::Pressed  => {
-                            if waiting_for_key &&
-                                (index != wait_for_key_last_pressed) {
-                                vm.end_wait_for_key(index);
-                                wait_for_key_last_pressed = index;
-                            } else {
-                                vm.keypad.set_key_state(index, state);
-                            }
-                        },
-                        Keystate::Released => {
-                            wait_for_key_last_pressed = 0xFF;
-                            if !waiting_for_key {
-                                vm.keypad.set_key_state(index, state);
-                            }
-                        },
+                UpdateRunStatus(run) => running = run,
+                UpdateKeyStatus(index, state) => match state {
+                    Keystate::Pressed => {
+                        if waiting_for_key && (index != wait_for_key_last_pressed) {
+                            vm.end_wait_for_key(index);
+                            wait_for_key_last_pressed = index;
+                        } else {
+                            vm.keypad.set_key_state(index, state);
+                        }
+                    }
+                    Keystate::Released => {
+                        wait_for_key_last_pressed = 0xFF;
+                        if !waiting_for_key {
+                            vm.keypad.set_key_state(index, state);
+                        }
                     }
                 },
-                Reset                         => vm.reset(),
-                Quit                          => {
+                Reset => vm.reset(),
+                Quit => {
                     running = false;
                     info!("terminating the virtual machine thread...");
                     tx.send(Finished).unwrap();
                     break 'vm;
-                },
+                }
             },
-            _              => {},
+            _ => {}
         }
 
         // CPU
@@ -265,5 +270,9 @@ pub fn get_display_size(w_width: u16, w_height: u16) -> (u16, u16, u16) {
     let scale = cmp::min(scale_w, scale_h);
 
     // adjust to the smallest scale and recompute the window dimensions
-    (scale, scale * (DISPLAY_WIDTH as u16), scale * (DISPLAY_HEIGHT as u16))
+    (
+        scale,
+        scale * (DISPLAY_WIDTH as u16),
+        scale * (DISPLAY_HEIGHT as u16),
+    )
 }

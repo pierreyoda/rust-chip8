@@ -1,20 +1,21 @@
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::{Receiver, Sender};
 
 extern crate sdl2;
-use self::sdl2::video::WindowContext;
-use self::sdl2::render::{Texture, TextureCreator, WindowCanvas};
 use self::sdl2::event::Event;
-use self::sdl2::rect::Rect;
-use self::sdl2::pixels::{Color, PixelFormatEnum};
 use self::sdl2::keyboard::Keycode;
+use self::sdl2::pixels::{Color, PixelFormatEnum};
+use self::sdl2::rect::Rect;
+use self::sdl2::render::{Texture, TextureCreator, WindowCanvas};
+use self::sdl2::video::WindowContext;
 
 extern crate chip8vm;
-use self::chip8vm::display::{Display, DISPLAY_WIDTH, DISPLAY_HEIGHT};
-use self::chip8vm::keypad::Keystate::{Released, Pressed};
-use super::chip8app::{Chip8EmulatorBackend, Chip8Config, Chip8VMCommand, Chip8UICommand,
-                      get_display_size};
-use super::chip8app::Chip8VMCommand::*;
+use self::chip8vm::display::{Display, DISPLAY_HEIGHT, DISPLAY_WIDTH};
+use self::chip8vm::keypad::Keystate::{Pressed, Released};
 use super::chip8app::Chip8UICommand::*;
+use super::chip8app::Chip8VMCommand::*;
+use super::chip8app::{
+    get_display_size, Chip8Config, Chip8EmulatorBackend, Chip8UICommand, Chip8VMCommand,
+};
 use super::input;
 
 // todo : make this a backend-agnostic option
@@ -35,18 +36,22 @@ const COLOR_PIXEL_ON: Color = Color {
 pub struct Chip8BackendSDL2;
 
 impl Chip8BackendSDL2 {
-    fn render_display<'c>(t: &'c TextureCreator<WindowContext>,
-                          c: &mut WindowCanvas,
-                          display: Display,
-                          scale: u32)
-                          -> Texture<'c> {
+    fn render_display<'c>(
+        t: &'c TextureCreator<WindowContext>,
+        c: &mut WindowCanvas,
+        display: Display,
+        scale: u32,
+    ) -> Texture<'c> {
         let display_width = DISPLAY_WIDTH as u32;
         let display_height = DISPLAY_HEIGHT as u32;
         let pixel_size = scale as i32;
 
-        let mut texture = t.create_texture_target(PixelFormatEnum::RGB24,
-                                                  display_width * scale,
-                                                  display_height * scale)
+        let mut texture = t
+            .create_texture_target(
+                PixelFormatEnum::RGB24,
+                display_width * scale,
+                display_height * scale,
+            )
             .unwrap();
         c.with_texture_canvas(&mut texture, |texture_canvas| {
             texture_canvas.set_draw_color(COLOR_PIXEL_OFF);
@@ -57,8 +62,12 @@ impl Chip8BackendSDL2 {
                     // TODO : precompute the used Rect ?
                     // since they only change at window resize...
                     if display.gfx[y as usize][x as usize] == 1u8 {
-                        let _ = texture_canvas.fill_rect(
-                            Rect::new(x * pixel_size, y * pixel_size, scale, scale));
+                        let _ = texture_canvas.fill_rect(Rect::new(
+                            x * pixel_size,
+                            y * pixel_size,
+                            scale,
+                            scale,
+                        ));
                     }
                 }
             }
@@ -70,10 +79,12 @@ impl Chip8BackendSDL2 {
 impl Chip8EmulatorBackend for Chip8BackendSDL2 {
     /// Initialize and run the emulation.
     /// Will panic if SDL2 fails to create the application window.
-    fn exec(&mut self,
-            config: &Chip8Config,
-            tx: Sender<Chip8VMCommand>,
-            rx: Receiver<Chip8UICommand>) {
+    fn exec(
+        &mut self,
+        config: &Chip8Config,
+        tx: Sender<Chip8VMCommand>,
+        rx: Receiver<Chip8UICommand>,
+    ) {
         info!("starting the main application / rendering thread");
 
         // window dimensions
@@ -152,12 +163,12 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
                                 tx.send(Reset).unwrap();
                             }
                             _ => {
-                                if !paused { 
+                                if !paused {
                                     if let Some(index) = key_binds.get(&keycode.unwrap()) {
                                         tx.send(UpdateKeyStatus(*index, Pressed)).unwrap();
                                     }
                                 }
-                            },
+                            }
                         }
                         keys_pressed.push(keycode);
                     }
@@ -177,7 +188,8 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
             }
 
             // Command from the VM
-            match rx.try_recv() { // non-blocking receiving function
+            match rx.try_recv() {
+                // non-blocking receiving function
                 Ok(ui_command) => {
                     match ui_command {
                         UpdateBeepingStatus(beeping) => {
@@ -187,17 +199,23 @@ impl Chip8EmulatorBackend for Chip8BackendSDL2 {
                             }
                         }
                         UpdateDisplay(display) => {
-                            let texture = Chip8BackendSDL2::render_display(&texture_creator,
-                                                                           &mut canvas,
-                                                                           display,
-                                                                           scale as u32);
+                            let texture = Chip8BackendSDL2::render_display(
+                                &texture_creator,
+                                &mut canvas,
+                                display,
+                                scale as u32,
+                            );
                             canvas
-                                .copy(&texture,
-                                      None,
-                                      Some(Rect::new(0,
-                                                     0,
-                                                     display_width * pixel_size,
-                                                     display_height * pixel_size)))
+                                .copy(
+                                    &texture,
+                                    None,
+                                    Some(Rect::new(
+                                        0,
+                                        0,
+                                        display_width * pixel_size,
+                                        display_height * pixel_size,
+                                    )),
+                                )
                                 .unwrap();
                         }
                         Finished => break 'main,
