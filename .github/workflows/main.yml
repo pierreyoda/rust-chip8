@@ -37,11 +37,11 @@ jobs:
         export PATH="$HOME/.cargo/bin:$PATH"
         cargo test
       
-  test_Windows:
-    runs-on: windows-2016
-    steps:
-    - uses: actions/checkout@v1
-    - name: Build
-      run: cargo build
-    - name: Test
-      run: cargo test
+  # test_Windows:
+  #   runs-on: windows-2016
+  #   steps:
+  #   - uses: actions/checkout@v1
+  #   - name: Build
+  #     run: cargo build
+  #   - name: Test
+  #     run: cargo test
