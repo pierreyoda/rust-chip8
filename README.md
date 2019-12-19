@@ -3,6 +3,12 @@
 A CHIP 8 emulator implemented in Rust and using SDL 2.
 Created for learning purposes.
 
+## Supported platforms
+
+- Windows: manually tested
+- Linux: manually tested with WSL2 + *CI*
+- MacOS: *CI*
+
 ## Dependencies
 
 - Rust : compiled against the latest [Rust *master* branch][rust-master]. The latest nightly installer should work.
