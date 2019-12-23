@@ -70,7 +70,8 @@ impl Chip8BackendSDL2 {
                     }
                 }
             }
-        });
+        })
+        .unwrap();
         texture
     }
 }

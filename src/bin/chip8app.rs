@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
-use time::{Duration, SteadyTime};
+use time::{Duration, Instant};
 
 extern crate chip8vm;
 use crate::input;
@@ -179,8 +179,8 @@ pub fn exec_vm(
     );
 
     // time handling is in nanoseconds
-    let mut t = SteadyTime::now();
-    let mut last_t_cpu = SteadyTime::now();
+    let mut t = Instant::now();
+    let mut last_t_cpu = Instant::now();
     let mut last_t_timers = t;
     let timers_step = Duration::nanoseconds(10i64.pow(9) / (TIMERS_CLOCK as i64));
     let cpu_step = Duration::nanoseconds(10i64.pow(9) / (cpu_clock as i64));
@@ -227,7 +227,7 @@ pub fn exec_vm(
         }
 
         // CPU
-        t = SteadyTime::now();
+        t = Instant::now();
         if t - last_t_cpu >= cpu_step {
             last_t_cpu = t;
             if running && !waiting_for_key {
@@ -242,7 +242,7 @@ pub fn exec_vm(
         }
 
         // Timers
-        t = SteadyTime::now(); // this may be overkill
+        t = Instant::now(); // this may be overkill
         if t - last_t_timers >= timers_step {
             last_t_timers = t;
             if running {
