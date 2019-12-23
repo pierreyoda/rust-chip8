@@ -3,13 +3,13 @@ use std::path::Path;
 
 #[macro_use]
 extern crate log;
-extern crate env_logger;
+use env_logger;
 
-extern crate getopts;
-extern crate time;
+
+
 use getopts::{Matches, Options};
 
-extern crate chip8vm;
+
 
 mod chip8app;
 mod chip8app_sdl2;

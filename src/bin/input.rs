@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-extern crate sdl2;
+use sdl2;
 use self::sdl2::keyboard::Keycode;
 
 /// Enumerates the supported keyboard bindings for the virtual keypad.

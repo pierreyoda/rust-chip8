@@ -224,10 +224,6 @@ fn input() {
     assert_eq!(vm.pc(), 0x999 + 4 + 4 + 6);
 }
 
-macro_rules! slice_eq {
-    () => {};
-}
-
 #[test]
 fn drawing() {
     let mut vm = Chip8::new();

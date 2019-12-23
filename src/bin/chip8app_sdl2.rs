@@ -1,6 +1,6 @@
 use std::sync::mpsc::{Receiver, Sender};
 
-extern crate sdl2;
+use sdl2;
 use self::sdl2::event::Event;
 use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::{Color, PixelFormatEnum};
@@ -8,7 +8,7 @@ use self::sdl2::rect::Rect;
 use self::sdl2::render::{Texture, TextureCreator, WindowCanvas};
 use self::sdl2::video::WindowContext;
 
-extern crate chip8vm;
+use chip8vm;
 use self::chip8vm::display::{Display, DISPLAY_HEIGHT, DISPLAY_WIDTH};
 use self::chip8vm::keypad::Keystate::{Pressed, Released};
 use crate::chip8app::Chip8UICommand::*;
