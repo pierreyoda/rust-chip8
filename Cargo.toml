@@ -2,6 +2,7 @@
 name = "chip8"
 version = "0.1.0"
 authors = ["pierreyoda <pierreyoda@users.noreply.github.com>"]
+autobins = false
 
 [lib]
 name = "chip8vm"
