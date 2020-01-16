@@ -5,11 +5,7 @@ use std::path::Path;
 extern crate log;
 use env_logger;
 
-
-
 use getopts::{Matches, Options};
-
-
 
 mod chip8app;
 mod chip8app_sdl2;

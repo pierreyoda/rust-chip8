@@ -5,8 +5,8 @@ use std::thread;
 
 use time::{Duration, Instant};
 
-use chip8vm;
 use crate::input;
+use chip8vm;
 use chip8vm::display::{Display, DISPLAY_HEIGHT, DISPLAY_WIDTH};
 use chip8vm::keypad::Keystate;
 use chip8vm::vm::{Chip8, CPU_CLOCK, TIMERS_CLOCK};

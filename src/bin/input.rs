@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use sdl2;
 use self::sdl2::keyboard::Keycode;
+use sdl2;
+use std::collections::HashMap;
 
 /// Enumerates the supported keyboard bindings for the virtual keypad.
 /// TODO : add a Custom(...key bindings...) type, loaded from a file ?
