@@ -67,7 +67,7 @@ macro_rules! op_not_implemented {
         println!(
             "Not implemented opcode {:0>4X} at {:0>5X}",
             $op as usize, $pc
-        );
+        )
     };
 }
 
