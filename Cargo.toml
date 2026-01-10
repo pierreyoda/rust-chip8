@@ -1,3 +1,4 @@
+
 [package]
 name = "chip8"
 version = "0.1.0"
@@ -14,9 +15,9 @@ name = "chip8ui"
 path = "src/bin/main.rs"
 
 [dependencies]
-log = "0.4.8"
-env_logger = "0.7.1"
-time = "0.2.7"
-getopts = "0.2.21"
-rand = "0.7.3"
-sdl2 = "0.33.0"
+log = "0.4.29"
+env_logger = "0.11.8"
+time = "0.3.44"
+getopts = "0.2.24"
+rand = "0.9.2"
+sdl2 = "0.38.0"
